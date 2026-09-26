@@ -1,0 +1,1 @@
+{"name":"hotel-business-manager","private":true,"packageManager":"pnpm@9.15.0","scripts":{"dev":"turbo dev","build":"turbo build","lint":"turbo lint","test":"turbo test"},"devDependencies":{"turbo":"^2.3.3","typescript":"^5.7.2"}}
