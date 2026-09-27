@@ -51,14 +51,51 @@ export class AuthService {
   async me(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, email: true, name: true, role: true, propertyId: true },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        propertyId: true,
+        memberships: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { businessId: true, role: true, business: { select: { name: true } } },
+        },
+      },
     });
     if (!user) throw new UnauthorizedException();
-    return user;
+    const { memberships = [], ...profile } = user;
+    return {
+      ...profile,
+      role: memberships[0]?.role === 'OWNER' ? 'ADMIN' : profile.role,
+      business: memberships[0]?.business ?? null,
+      businessId: memberships[0]?.businessId ?? null,
+    };
   }
 
-  private async issueTokens(user: { id: string; email: string; name: string; role: string }) {
-    const payload = { sub: user.id, email: user.email, role: user.role, jti: randomUUID() };
+  async logout(userId: string) {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { refreshTokenHash: null, tokenVersion: { increment: 1 } },
+    });
+    return { success: true };
+  }
+
+  private async issueTokens(user: {
+    id: string;
+    email: string;
+    name: string;
+    role: string;
+    tokenVersion?: number;
+  }) {
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      tokenVersion: user.tokenVersion ?? 0,
+      jti: randomUUID(),
+    };
     const accessToken = await this.jwt.signAsync(payload, {
       secret: this.config.getOrThrow('JWT_ACCESS_SECRET'),
       expiresIn: '15m',

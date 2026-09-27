@@ -7,29 +7,31 @@ describe('RoomsService', () => {
     room: {
       findMany: jest.fn(),
       findFirst: jest.fn(),
-      findUnique: jest.fn(),
       create: jest.fn(),
-      update: jest.fn(),
-      delete: jest.fn(),
+      updateMany: jest.fn(),
+      deleteMany: jest.fn(),
     },
   };
   const service = new RoomsService(prisma);
   beforeEach(() => jest.clearAllMocks());
 
-  it('lists rooms only after confirming property ownership', async () => {
-    prisma.property.findFirst.mockResolvedValue({ id: 'property-1', ownerId: 'owner-1' });
+  it('lists rooms after confirming the property belongs to the business', async () => {
+    prisma.property.findFirst.mockResolvedValue({ id: 'property-1' });
     prisma.room.findMany.mockResolvedValue([{ id: 'room-1', status: 'AVAILABLE' }]);
-    const result = await service.list('owner-1', 'property-1');
+    const result = await service.list('business-a', 'property-1');
     expect(result[0].status).toBe('AVAILABLE');
+    expect(prisma.property.findFirst).toHaveBeenCalledWith({
+      where: { id: 'property-1', businessId: 'business-a' },
+    });
     expect(prisma.room.findMany).toHaveBeenCalledWith({
-      where: { propertyId: 'property-1' },
+      where: { propertyId: 'property-1', businessId: 'business-a' },
       orderBy: { label: 'asc' },
     });
   });
-  it('creates rooms with the owning property and status payload', async () => {
-    prisma.property.findFirst.mockResolvedValue({ id: 'property-1', ownerId: 'owner-1' });
+  it('creates rooms using the active business and property', async () => {
+    prisma.property.findFirst.mockResolvedValue({ id: 'property-1' });
     prisma.room.create.mockResolvedValue({ id: 'room-1', status: 'CLEANING' });
-    await service.create('owner-1', 'property-1', {
+    await service.create('business-a', 'property-1', {
       label: '201',
       type: 'Suite',
       capacity: 3,
@@ -37,19 +39,25 @@ describe('RoomsService', () => {
       status: 'CLEANING' as any,
     });
     expect(prisma.room.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ propertyId: 'property-1', status: 'CLEANING' }),
+      data: expect.objectContaining({
+        propertyId: 'property-1',
+        businessId: 'business-a',
+        status: 'CLEANING',
+      }),
     });
   });
-  it('gets a room only after checking its property owner', async () => {
-    prisma.room.findFirst.mockResolvedValue({ id: 'room-1', property: { ownerId: 'owner-1' } });
-    prisma.room.findUnique.mockResolvedValue({ id: 'room-1', status: 'AVAILABLE' });
-    await expect(service.get('owner-1', 'property-1', 'room-1')).resolves.toMatchObject({
+  it('gets only a room in the current business and property', async () => {
+    prisma.room.findFirst.mockResolvedValue({ id: 'room-1', status: 'AVAILABLE' });
+    await expect(service.get('business-a', 'property-1', 'room-1')).resolves.toMatchObject({
       status: 'AVAILABLE',
     });
+    expect(prisma.room.findFirst).toHaveBeenCalledWith({
+      where: { id: 'room-1', propertyId: 'property-1', businessId: 'business-a' },
+    });
   });
-  it('does not expose rooms for an unowned property', async () => {
+  it('does not expose rooms through another business property', async () => {
     prisma.property.findFirst.mockResolvedValue(null);
-    await expect(service.list('owner-1', 'property-other')).rejects.toBeInstanceOf(
+    await expect(service.list('business-a', 'property-b')).rejects.toBeInstanceOf(
       NotFoundException,
     );
     expect(prisma.room.findMany).not.toHaveBeenCalled();

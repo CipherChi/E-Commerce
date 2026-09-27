@@ -1,6 +1,6 @@
 const setupSteps = [
   'Add your properties and rooms',
-  'Register guests and create bookings',
+  'Register customers and create bookings',
   'Record payments and review invoices',
 ];
 
@@ -25,7 +25,7 @@ export default function HomePage() {
             Make every stay easier to manage.
           </h1>
           <p className="mt-6 max-w-xl text-lg leading-8 text-ink/70">
-            Keep rooms, reservations, guests, and payments organized from arrival to checkout.
+            Keep rooms, reservations, customers, and payments organized from arrival to checkout.
           </p>
           <div className="mt-9 flex flex-wrap gap-3">
             <a
@@ -42,9 +42,9 @@ export default function HomePage() {
             </a>
             <a
               className="rounded-full border border-ink/15 px-6 py-3 text-sm font-semibold text-ink/75"
-              href="/guests"
+              href="/customers"
             >
-              Guests
+              Customers
             </a>
             <span className="rounded-full border border-ink/15 px-6 py-3 text-sm font-medium text-ink/70">
               Local setup preview

@@ -16,6 +16,17 @@ Phase 1 monorepo for reservation-to-cash operations, built with Next.js, NestJS,
 4. Apply migrations and create the administrator with `corepack pnpm --filter api exec prisma migrate deploy` and `corepack pnpm --filter api prisma:seed`.
 5. Start the API and web app in separate terminals with `corepack pnpm dev:api` and `corepack pnpm dev:web`, then open <http://localhost:3000>.
 
-Sign in with the seeded administrator account to create properties and rooms. New registrations receive the staff role. Authenticated staff can register guests and search the directory by name or phone.
+Sign in with the seeded administrator account, or register an account and create a business. Business owners can add properties and rooms. Customers and all property records are scoped to the active business; use `/customers` to add, search, edit, and archive customer records.
+
+The tenant-isolation end-to-end suite uses a dedicated real Postgres database. Set `TENANT_TEST_DATABASE_URL` to that database in PowerShell, then run:
+
+```powershell
+$env:TENANT_TEST_DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/hotel_manager_test?schema=public"
+$env:DATABASE_URL = $env:TENANT_TEST_DATABASE_URL
+corepack pnpm --filter api exec prisma migrate deploy
+corepack pnpm --filter api test:e2e:tenant
+```
+
+The test makes two businesses and verifies GET, PATCH, and DELETE for customers, properties, rooms, bookings, payments, and invoices. It refuses to run without the dedicated database URL.
 
 See [Development](docs/DEVELOPMENT.md) for setup and troubleshooting, and [Branching](docs/BRANCHING.md) for the Git workflow. Do not use the sample credentials in production.

@@ -9,6 +9,8 @@
     "test": "jest --runInBand",
     "test:watch": "jest --watch",
     "test:e2e": "jest --config ./test/jest-e2e.config.json --runInBand",
+    "test:e2e:auth": "jest --config ./test/jest-e2e.config.json --runInBand --runTestsByPath ./test/auth.e2e-spec.ts",
+    "test:e2e:tenant": "jest --config ./test/jest-e2e.config.json --runInBand --runTestsByPath ./test/tenant-isolation.e2e-spec.ts",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "prisma db seed"
   },

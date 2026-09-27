@@ -4,9 +4,9 @@ import Link from 'next/link';
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { apiRequest } from '@/lib/api';
 
-type Guest = {
+type Customer = {
   id: string;
-  fullName: string;
+  name: string;
   phone: string;
   email?: string | null;
   idType?: string | null;
@@ -14,20 +14,22 @@ type Guest = {
   notes?: string | null;
 };
 
-export default function GuestsPage() {
-  const [guests, setGuests] = useState<Guest[]>([]);
+export default function CustomersPage() {
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const load = useCallback(async (search: string) => {
     try {
-      setGuests(
-        await apiRequest<Guest[]>(`/guests${search ? `?q=${encodeURIComponent(search)}` : ''}`),
+      setCustomers(
+        await apiRequest<Customer[]>(
+          `/customers${search ? `?q=${encodeURIComponent(search)}` : ''}`,
+        ),
       );
       setError('');
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to load guests');
+      setError(cause instanceof Error ? cause.message : 'Unable to load customers');
     } finally {
       setLoading(false);
     }
@@ -43,10 +45,10 @@ export default function GuestsPage() {
     setSaving(true);
     setError('');
     try {
-      await apiRequest('/guests', {
+      await apiRequest('/customers', {
         method: 'POST',
         body: JSON.stringify({
-          fullName: form.get('fullName'),
+          name: form.get('name'),
           phone: form.get('phone'),
           email: form.get('email') || undefined,
           idType: form.get('idType') || undefined,
@@ -58,7 +60,7 @@ export default function GuestsPage() {
       setQuery('');
       await load('');
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to create guest');
+      setError(cause instanceof Error ? cause.message : 'Unable to create customer');
     } finally {
       setSaving(false);
     }
@@ -75,19 +77,21 @@ export default function GuestsPage() {
       </header>
       <div className="mt-12">
         <p className="text-sm font-semibold uppercase tracking-[0.18em] text-accent">
-          Guest directory
+          Customer directory
         </p>
-        <h1 className="mt-2 text-4xl font-semibold">Guests</h1>
-        <p className="mt-3 text-ink/65">Register guests and quickly find them by name or phone.</p>
+        <h1 className="mt-2 text-4xl font-semibold">Customers</h1>
+        <p className="mt-3 text-ink/65">
+          Register customers and quickly find them by name, phone, or email.
+        </p>
       </div>
       <section className="mt-9 grid gap-8 lg:grid-cols-[0.8fr_1.2fr]">
         <form className="h-fit rounded-3xl border border-ink/10 bg-white p-6" onSubmit={create}>
-          <h2 className="text-xl font-semibold">Register a guest</h2>
+          <h2 className="text-xl font-semibold">Add a customer</h2>
           <label className="mt-5 block text-sm font-medium">
             Full name
             <input
               className="mt-2 w-full rounded-xl border border-ink/15 px-4 py-3"
-              name="fullName"
+              name="name"
               autoComplete="name"
               required
             />
@@ -146,9 +150,9 @@ export default function GuestsPage() {
         <section>
           <div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
             <div>
-              <h2 className="text-xl font-semibold">Guest list</h2>
+              <h2 className="text-xl font-semibold">Customer list</h2>
               <p className="mt-1 text-sm text-ink/60">
-                {guests.length} {guests.length === 1 ? 'guest' : 'guests'}
+                {customers.length} {customers.length === 1 ? 'customer' : 'customers'}
               </p>
             </div>
             <label className="text-sm font-medium">
@@ -163,31 +167,41 @@ export default function GuestsPage() {
             </label>
           </div>
           {loading ? (
-            <p className="text-sm text-ink/60">Loading guests…</p>
-          ) : guests.length === 0 ? (
+            <p className="text-sm text-ink/60">Loading customers…</p>
+          ) : customers.length === 0 ? (
             <div className="rounded-3xl border border-dashed border-ink/20 p-8 text-sm text-ink/60">
-              {query ? 'No guests match this search.' : 'No guests registered yet.'}
+              {query ? 'No customers match this search.' : 'No customers registered yet.'}
             </div>
           ) : (
             <div className="grid gap-3">
-              {guests.map((guest) => (
-                <article className="rounded-2xl border border-ink/10 bg-white p-5" key={guest.id}>
+              {customers.map((customer) => (
+                <article
+                  className="rounded-2xl border border-ink/10 bg-white p-5"
+                  key={customer.id}
+                >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <h3 className="font-semibold">{guest.fullName}</h3>
-                      <p className="mt-1 text-sm text-ink/65">{guest.phone}</p>
-                      {guest.email && <p className="mt-1 text-sm text-ink/55">{guest.email}</p>}
+                      <Link
+                        className="font-semibold text-accent"
+                        href={`/customers/${customer.id}`}
+                      >
+                        {customer.name}
+                      </Link>
+                      <p className="mt-1 text-sm text-ink/65">{customer.phone}</p>
+                      {customer.email && (
+                        <p className="mt-1 text-sm text-ink/55">{customer.email}</p>
+                      )}
                     </div>
-                    {guest.idType && (
+                    {customer.idType && (
                       <span className="rounded-full bg-paper px-3 py-1 text-xs text-ink/65">
-                        {guest.idType}
-                        {guest.idNumber ? ` · ${guest.idNumber}` : ''}
+                        {customer.idType}
+                        {customer.idNumber ? ` · ${customer.idNumber}` : ''}
                       </span>
                     )}
                   </div>
-                  {guest.notes && (
+                  {customer.notes && (
                     <p className="mt-3 border-t border-ink/5 pt-3 text-sm text-ink/60">
-                      {guest.notes}
+                      {customer.notes}
                     </p>
                   )}
                 </article>

@@ -4,12 +4,9 @@ import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 
-describe('Auth endpoints', () => {
+describe('Authentication endpoints', () => {
   let app: INestApplication;
   const users: any[] = [];
-  const properties: any[] = [];
-  const rooms: any[] = [];
-  const guests: any[] = [];
   const prisma = {
     user: {
       findUnique: jest.fn(
@@ -21,6 +18,7 @@ describe('Auth endpoints', () => {
           id: `user-${users.length + 1}`,
           role: 'STAFF',
           propertyId: null,
+          tokenVersion: 0,
           refreshTokenHash: null,
           ...data,
         };
@@ -29,100 +27,18 @@ describe('Auth endpoints', () => {
       }),
       update: jest.fn(({ where, data }: any) => {
         const user = users.find((entry) => entry.id === where.id);
-        Object.assign(user, data);
+        const { tokenVersion, ...fields } = data;
+        Object.assign(user, fields);
+        if (tokenVersion?.increment) user.tokenVersion += tokenVersion.increment;
+        else if (typeof tokenVersion === 'number') user.tokenVersion = tokenVersion;
         return user;
       }),
     },
-    property: {
-      findMany: jest.fn(({ where }: any) =>
-        properties.filter((property) => !where.ownerId || property.ownerId === where.ownerId),
-      ),
-      findFirst: jest.fn(
-        ({ where }: any) =>
-          properties.find(
-            (property) => property.id === where.id && property.ownerId === where.ownerId,
-          ) ?? null,
-      ),
-      findUnique: jest.fn(
-        ({ where }: any) => properties.find((property) => property.id === where.id) ?? null,
-      ),
-      create: jest.fn(({ data }: any) => {
-        const property = { id: `property-${properties.length + 1}`, ...data };
-        properties.push(property);
-        return property;
-      }),
-      update: jest.fn(({ where, data }: any) => {
-        const property = properties.find((entry) => entry.id === where.id);
-        Object.assign(property, data);
-        return property;
-      }),
-      delete: jest.fn(({ where }: any) => {
-        const index = properties.findIndex((entry) => entry.id === where.id);
-        return properties.splice(index, 1)[0];
-      }),
-    },
-    room: {
-      findMany: jest.fn(({ where }: any) =>
-        rooms.filter((room) => room.propertyId === where.propertyId),
-      ),
-      findFirst: jest.fn(({ where }: any) => {
-        const room = rooms.find(
-          (entry) => entry.id === where.id && entry.propertyId === where.propertyId,
-        );
-        return room
-          ? { ...room, property: properties.find((property) => property.id === room.propertyId) }
-          : null;
-      }),
-      create: jest.fn(({ data }: any) => {
-        const room = { id: `room-${rooms.length + 1}`, status: 'AVAILABLE', ...data };
-        rooms.push(room);
-        return room;
-      }),
-      update: jest.fn(({ where, data }: any) => {
-        const room = rooms.find((entry) => entry.id === where.id);
-        Object.assign(room, data);
-        return room;
-      }),
-      delete: jest.fn(({ where }: any) => {
-        const index = rooms.findIndex((entry) => entry.id === where.id);
-        return rooms.splice(index, 1)[0];
-      }),
-    },
-    guest: {
-      findMany: jest.fn(({ where }: any) =>
-        guests.filter(
-          (guest) =>
-            !where?.OR ||
-            where.OR.some(
-              (filter: any) =>
-                guest.fullName
-                  .toLowerCase()
-                  .includes(filter.fullName?.contains?.toLowerCase() ?? '\u0000') ||
-                guest.phone.includes(filter.phone?.contains ?? '\u0000'),
-            ),
-        ),
-      ),
-      findUnique: jest.fn(
-        ({ where }: any) => guests.find((guest) => guest.id === where.id) ?? null,
-      ),
-      create: jest.fn(({ data }: any) => {
-        const guest = { id: `guest-${guests.length + 1}`, createdAt: new Date(), ...data };
-        guests.push(guest);
-        return guest;
-      }),
-      update: jest.fn(({ where, data }: any) => {
-        const guest = guests.find((entry) => entry.id === where.id);
-        Object.assign(guest, data);
-        return guest;
-      }),
-      delete: jest.fn(({ where }: any) => {
-        const index = guests.findIndex((entry) => entry.id === where.id);
-        return guests.splice(index, 1)[0];
-      }),
-    },
+    businessMember: { findFirst: jest.fn().mockResolvedValue(null) },
     $connect: jest.fn(),
     $disconnect: jest.fn(),
   };
+
   beforeAll(async () => {
     process.env.JWT_ACCESS_SECRET = 'test-access-secret';
     process.env.JWT_REFRESH_SECRET = 'test-refresh-secret';
@@ -137,16 +53,16 @@ describe('Auth endpoints', () => {
     await app.init();
   });
   afterAll(async () => app.close());
-  it('rejects invalid registration payloads', async () => {
+
+  it('rejects invalid registration and unauthenticated profile requests', async () => {
     await request(app.getHttpServer())
       .post('/auth/register')
       .send({ email: 'bad', password: 'short', name: '' })
       .expect(400);
-  });
-  it('rejects unauthenticated access to /auth/me', async () => {
     await request(app.getHttpServer()).get('/auth/me').expect(401);
   });
-  it('registers, logs in, refreshes, and returns a sanitized current user', async () => {
+
+  it('registers, logs in, refreshes, returns a sanitized profile, and revokes refresh on logout', async () => {
     const credentials = {
       email: 'auth-flow@example.com',
       name: 'Auth Flow',
@@ -165,80 +81,33 @@ describe('Auth endpoints', () => {
       .post('/auth/refresh')
       .send({ refreshToken: login.body.refreshToken })
       .expect(201);
-    const me = await request(app.getHttpServer())
-      .get('/auth/me')
-      .set('Authorization', `Bearer ${refreshed.body.accessToken}`)
-      .expect(200);
+    const auth = { Authorization: `Bearer ${refreshed.body.accessToken}` };
+    const me = await request(app.getHttpServer()).get('/auth/me').set(auth).expect(200);
     expect(me.body).toMatchObject({
       email: credentials.email,
       name: credentials.name,
       role: 'STAFF',
     });
     await request(app.getHttpServer())
+      .post('/auth/logout')
+      .set(auth)
+      .expect(201)
+      .expect({ success: true });
+    await request(app.getHttpServer()).get('/auth/me').set(auth).expect(401);
+    await request(app.getHttpServer())
       .post('/auth/refresh')
-      .send({ refreshToken: login.body.refreshToken })
+      .send({ refreshToken: refreshed.body.refreshToken })
       .expect(401);
   });
-  it('allows an admin to create a property and rooms, and blocks non-admin property deletion', async () => {
-    const adminCredentials = { email: 'admin@example.com', name: 'Admin', password: 'password123' };
-    await request(app.getHttpServer()).post('/auth/register').send(adminCredentials).expect(201);
-    users.find((user) => user.email === adminCredentials.email).role = 'ADMIN';
-    const adminLogin = await request(app.getHttpServer())
-      .post('/auth/login')
-      .send({ email: adminCredentials.email, password: adminCredentials.password })
-      .expect(201);
-    const adminHeaders = { Authorization: `Bearer ${adminLogin.body.accessToken}` };
-    const property = await request(app.getHttpServer())
-      .post('/properties')
-      .set(adminHeaders)
-      .send({ name: 'Harbor Hotel', address: '1 Marina Road', type: 'HOTEL' })
-      .expect(201);
-    const room = await request(app.getHttpServer())
-      .post(`/properties/${property.body.id}/rooms`)
-      .set(adminHeaders)
-      .send({ label: '101', type: 'Deluxe', capacity: 2, basePrice: 45000 })
-      .expect(201);
-    expect(room.body.status).toBe('AVAILABLE');
-    const listedRooms = await request(app.getHttpServer())
-      .get(`/properties/${property.body.id}/rooms`)
-      .set(adminHeaders)
-      .expect(200);
-    expect(listedRooms.body).toHaveLength(1);
 
-    const staffCredentials = { email: 'staff@example.com', name: 'Staff', password: 'password123' };
-    await request(app.getHttpServer()).post('/auth/register').send(staffCredentials).expect(201);
-    const staffLogin = await request(app.getHttpServer())
-      .post('/auth/login')
-      .send({ email: staffCredentials.email, password: staffCredentials.password })
-      .expect(201);
+  it('rejects invalid passwords without revealing account existence', async () => {
     await request(app.getHttpServer())
-      .delete(`/properties/${property.body.id}`)
-      .set({ Authorization: `Bearer ${staffLogin.body.accessToken}` })
-      .expect(403);
-  });
-  it('creates and searches guests by name or phone', async () => {
-    const credentials = {
-      email: 'guest-staff@example.com',
-      name: 'Guest Staff',
-      password: 'password123',
-    };
-    await request(app.getHttpServer()).post('/auth/register').send(credentials).expect(201);
-    const login = await request(app.getHttpServer())
       .post('/auth/login')
-      .send({ email: credentials.email, password: credentials.password })
-      .expect(201);
-    const auth = { Authorization: `Bearer ${login.body.accessToken}` };
+      .send({ email: 'missing@example.com', password: 'password123' })
+      .expect(401);
     await request(app.getHttpServer())
-      .post('/guests')
-      .set(auth)
-      .send({ fullName: 'Ada Okafor', phone: '+2348012345678' })
-      .expect(201);
-    const byName = await request(app.getHttpServer()).get('/guests?q=ada').set(auth).expect(200);
-    const byPhone = await request(app.getHttpServer())
-      .get('/guests?q=123456')
-      .set(auth)
-      .expect(200);
-    expect(byName.body).toHaveLength(1);
-    expect(byPhone.body[0].fullName).toBe('Ada Okafor');
+      .post('/auth/login')
+      .send({ email: 'auth-flow@example.com', password: 'wrong-password' })
+      .expect(401);
   });
 });

@@ -35,4 +35,10 @@ export class AuthController {
   me(@Req() req: Request & { user: { sub: string } }) {
     return this.auth.me(req.user.sub);
   }
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Post('logout')
+  logout(@Req() req: Request & { user: { sub: string } }) {
+    return this.auth.logout(req.user.sub);
+  }
 }

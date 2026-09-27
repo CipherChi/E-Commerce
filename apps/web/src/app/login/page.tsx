@@ -26,7 +26,11 @@ export default function LoginPage() {
       sessionStorage.setItem('staywise.accessToken', result.accessToken);
       sessionStorage.setItem('staywise.refreshToken', result.refreshToken);
       sessionStorage.setItem('staywise.user', JSON.stringify(result.user));
-      window.location.assign('/');
+      const profileResponse = await fetch(`${apiUrl}/auth/me`, {
+        headers: { Authorization: `Bearer ${result.accessToken}` },
+      });
+      const profile = profileResponse.ok ? await profileResponse.json() : null;
+      window.location.assign(profile?.businessId ? '/properties' : '/business');
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -83,6 +87,12 @@ export default function LoginPage() {
             {loading ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
+        <p className="mt-5 text-sm text-ink/60">
+          New to Staywise?{' '}
+          <Link className="font-medium text-accent" href="/register">
+            Create an account
+          </Link>
+        </p>
       </section>
     </main>
   );

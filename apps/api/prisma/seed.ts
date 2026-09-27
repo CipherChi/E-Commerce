@@ -12,10 +12,20 @@ async function main() {
       'Set ADMIN_EMAIL, ADMIN_NAME, and an ADMIN_PASSWORD with at least 12 characters before seeding.',
     );
   }
-  await prisma.user.upsert({
+  const user = await prisma.user.upsert({
     where: { email },
     update: {},
     create: { email, name, passwordHash: await argon2.hash(password), role: Role.ADMIN },
+  });
+  await prisma.business.upsert({
+    where: { id: 'default-business-migration' },
+    update: {},
+    create: { id: 'default-business-migration', name: 'Default Business' },
+  });
+  await prisma.businessMember.upsert({
+    where: { businessId_userId: { businessId: 'default-business-migration', userId: user.id } },
+    update: {},
+    create: { businessId: 'default-business-migration', userId: user.id, role: 'OWNER' },
   });
   console.log(`Administrator account ready for ${email}`);
 }

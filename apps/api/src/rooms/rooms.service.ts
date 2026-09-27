@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateRoomDto } from './dto/create-room.dto';
 import { UpdateRoomDto } from './dto/update-room.dto';
@@ -7,45 +7,49 @@ import { UpdateRoomDto } from './dto/update-room.dto';
 export class RoomsService {
   constructor(private prisma: PrismaService) {}
 
-  async list(userId: string, propertyId: string) {
-    await this.assertPropertyOwner(userId, propertyId);
-    return this.prisma.room.findMany({ where: { propertyId }, orderBy: { label: 'asc' } });
-  }
-
-  async get(userId: string, propertyId: string, roomId: string) {
-    await this.assertRoomOwner(userId, propertyId, roomId);
-    return this.prisma.room.findUnique({ where: { id: roomId } });
-  }
-
-  async create(userId: string, propertyId: string, dto: CreateRoomDto) {
-    await this.assertPropertyOwner(userId, propertyId);
-    return this.prisma.room.create({ data: { ...dto, propertyId } });
-  }
-
-  async update(userId: string, propertyId: string, roomId: string, dto: UpdateRoomDto) {
-    await this.assertRoomOwner(userId, propertyId, roomId);
-    return this.prisma.room.update({ where: { id: roomId }, data: dto });
-  }
-
-  async remove(userId: string, propertyId: string, roomId: string) {
-    await this.assertRoomOwner(userId, propertyId, roomId);
-    return this.prisma.room.delete({ where: { id: roomId } });
-  }
-
-  private async assertPropertyOwner(userId: string, propertyId: string) {
-    const property = await this.prisma.property.findFirst({
-      where: { id: propertyId, ownerId: userId },
+  async list(businessId: string, propertyId: string) {
+    await this.assertPropertyInBusiness(businessId, propertyId);
+    return this.prisma.room.findMany({
+      where: { propertyId, businessId },
+      orderBy: { label: 'asc' },
     });
-    if (!property) throw new NotFoundException('Property not found');
   }
 
-  private async assertRoomOwner(userId: string, propertyId: string, roomId: string) {
+  async get(businessId: string, propertyId: string, roomId: string) {
     const room = await this.prisma.room.findFirst({
-      where: { id: roomId, propertyId },
-      include: { property: true },
+      where: { id: roomId, propertyId, businessId },
     });
     if (!room) throw new NotFoundException('Room not found');
-    if (room.property.ownerId !== userId)
-      throw new ForbiddenException('You cannot change another owner’s room');
+    return room;
+  }
+
+  async create(businessId: string, propertyId: string, dto: CreateRoomDto) {
+    await this.assertPropertyInBusiness(businessId, propertyId);
+    return this.prisma.room.create({ data: { ...dto, propertyId, businessId } });
+  }
+
+  async update(businessId: string, propertyId: string, roomId: string, dto: UpdateRoomDto) {
+    await this.get(businessId, propertyId, roomId);
+    const result = await this.prisma.room.updateMany({
+      where: { id: roomId, propertyId, businessId },
+      data: dto,
+    });
+    if (!result.count) throw new NotFoundException('Room not found');
+    return this.get(businessId, propertyId, roomId);
+  }
+
+  async remove(businessId: string, propertyId: string, roomId: string) {
+    const result = await this.prisma.room.deleteMany({
+      where: { id: roomId, propertyId, businessId },
+    });
+    if (!result.count) throw new NotFoundException('Room not found');
+    return { success: true };
+  }
+
+  private async assertPropertyInBusiness(businessId: string, propertyId: string) {
+    const property = await this.prisma.property.findFirst({
+      where: { id: propertyId, businessId },
+    });
+    if (!property) throw new NotFoundException('Property not found');
   }
 }
