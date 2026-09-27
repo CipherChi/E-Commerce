@@ -38,6 +38,7 @@ export class CustomersService {
         bookings: { include: { payments: true, invoice: true }, orderBy: { checkIn: 'desc' } },
       },
     });
+    // Deliberately hide cross-business records as 404 instead of confirming them with 403.
     if (!customer) throw new NotFoundException('Customer not found');
     const outstandingBalance = customer.bookings.reduce(
       (sum, booking) =>
@@ -78,6 +79,7 @@ export class CustomersService {
     const customer = await this.prisma.customer.findFirst({
       where: { id, businessId, archivedAt: null },
     });
+    // Deliberately hide cross-business records as 404 instead of confirming them with 403.
     if (!customer) throw new NotFoundException('Customer not found');
     return customer;
   }

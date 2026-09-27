@@ -19,6 +19,7 @@ export class RoomsService {
     const room = await this.prisma.room.findFirst({
       where: { id: roomId, propertyId, businessId },
     });
+    // Deliberately hide cross-business records as 404 instead of confirming them with 403.
     if (!room) throw new NotFoundException('Room not found');
     return room;
   }
@@ -50,6 +51,7 @@ export class RoomsService {
     const property = await this.prisma.property.findFirst({
       where: { id: propertyId, businessId },
     });
+    // Deliberately hide cross-business records as 404 instead of confirming them with 403.
     if (!property) throw new NotFoundException('Property not found');
   }
 }

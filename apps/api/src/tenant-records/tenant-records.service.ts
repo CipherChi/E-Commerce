@@ -22,6 +22,7 @@ export class TenantRecordsService {
 
   async get(resource: Resource, businessId: string, id: string) {
     const record = await this.delegate(resource).findFirst({ where: { id, businessId } });
+    // Deliberately hide cross-business records as 404 instead of confirming them with 403.
     if (!record) throw new NotFoundException(`${resource} not found`);
     return record;
   }

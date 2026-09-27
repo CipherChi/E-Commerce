@@ -20,6 +20,7 @@ export class PropertiesService {
       where: { id: propertyId, businessId },
       include: { _count: { select: { rooms: true } } },
     });
+    // Deliberately hide cross-business records as 404 instead of confirming them with 403.
     if (!property) throw new NotFoundException('Property not found');
     return property;
   }
