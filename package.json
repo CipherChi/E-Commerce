@@ -5,12 +5,13 @@
   "scripts": {
     "dev": "corepack pnpm --filter web dev",
     "dev:web": "corepack pnpm --filter web dev",
-    "build": "corepack pnpm --filter web build",
+    "dev:api": "corepack pnpm --filter api start:dev",
+    "build": "corepack pnpm --filter api build && corepack pnpm --filter web build",
     "build:web": "corepack pnpm --filter web build",
     "lint": "corepack pnpm --filter web lint",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "turbo test"
+    "test": "corepack pnpm --filter api test"
   },
   "devDependencies": {
     "eslint": "^8.57.1",

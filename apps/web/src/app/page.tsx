@@ -28,9 +28,12 @@ export default function HomePage() {
             Keep rooms, reservations, guests, and payments organized from arrival to checkout.
           </p>
           <div className="mt-9 flex flex-wrap gap-3">
-            <span className="rounded-full bg-accent px-6 py-3 text-sm font-semibold text-white">
-              Login arrives in M1
-            </span>
+            <a
+              className="rounded-full bg-accent px-6 py-3 text-sm font-semibold text-white"
+              href="/login"
+            >
+              Sign in
+            </a>
             <span className="rounded-full border border-ink/15 px-6 py-3 text-sm font-medium text-ink/70">
               Local setup preview
             </span>
