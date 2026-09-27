@@ -10,7 +10,7 @@
     "test:watch": "jest --watch",
     "test:e2e": "jest --config ./test/jest-e2e.config.json --runInBand",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:seed": "tsx prisma/seed.ts"
+    "prisma:seed": "prisma db seed"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.15",
@@ -29,6 +29,9 @@
     "passport-jwt": "4.0.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.4.9",

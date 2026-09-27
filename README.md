@@ -11,10 +11,11 @@ Phase 1 monorepo for reservation-to-cash operations, built with Next.js, NestJS,
 ## Local setup
 
 1. Install dependencies with `corepack pnpm install`.
-2. Copy `.env.example` to `.env`.
+2. Copy `.env.example` to `.env` and `apps/api/.env.example` to `apps/api/.env`; set distinct random JWT secrets and an administrator email, name, and password of at least 12 characters in the API environment.
 3. Start PostgreSQL with `docker compose -f infra/docker-compose.yml up -d postgres`.
-4. Start the web app with `corepack pnpm dev:web` and open <http://localhost:3000>.
+4. Apply migrations and create the administrator with `corepack pnpm --filter api exec prisma migrate deploy` and `corepack pnpm --filter api prisma:seed`.
+5. Start the API and web app in separate terminals with `corepack pnpm dev:api` and `corepack pnpm dev:web`, then open <http://localhost:3000>.
 
-The API and Prisma migration workflow are introduced in milestone M1. Until then, the web app runs independently while PostgreSQL is available for database setup work.
+Sign in with the seeded administrator account to create properties and rooms. New registrations receive the staff role.
 
 See [Development](docs/DEVELOPMENT.md) for setup and troubleshooting, and [Branching](docs/BRANCHING.md) for the Git workflow. Do not use the sample credentials in production.

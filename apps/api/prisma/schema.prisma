@@ -52,17 +52,17 @@ enum InvoiceStatus {
 }
 
 model User {
-  id              String     @id @default(cuid())
-  email           String     @unique
-  passwordHash    String
-    refreshTokenHash String?
-  name            String
-  role            Role       @default(STAFF)
-  propertyId      String?
-  property        Property?  @relation("UserProperty", fields: [propertyId], references: [id])
-  ownedProperties Property[] @relation("PropertyOwner")
-  payments        Payment[]  @relation("RecordedBy")
-  createdAt       DateTime   @default(now())
+  id               String     @id @default(cuid())
+  email            String     @unique
+  passwordHash     String
+  refreshTokenHash String?
+  name             String
+  role             Role       @default(STAFF)
+  propertyId       String?
+  property         Property?  @relation("UserProperty", fields: [propertyId], references: [id])
+  ownedProperties  Property[] @relation("PropertyOwner")
+  payments         Payment[]  @relation("RecordedBy")
+  createdAt        DateTime   @default(now())
 }
 
 model Property {

@@ -34,6 +34,12 @@ export default function HomePage() {
             >
               Sign in
             </a>
+            <a
+              className="rounded-full border border-ink/15 px-6 py-3 text-sm font-semibold text-ink/75"
+              href="/properties"
+            >
+              Manage properties
+            </a>
             <span className="rounded-full border border-ink/15 px-6 py-3 text-sm font-medium text-ink/70">
               Local setup preview
             </span>

@@ -13,16 +13,24 @@ From the repository root:
 ```sh
 corepack pnpm install
 cp .env.example .env
+cp apps/api/.env.example apps/api/.env
 docker compose -f infra/docker-compose.yml up -d postgres
+corepack pnpm --filter api exec prisma migrate deploy
+corepack pnpm --filter api prisma:seed
+corepack pnpm dev:api
 corepack pnpm dev:web
 ```
 
-Open <http://localhost:3000>. The initial web shell runs independently of the API. API bootstrap, authentication, and Prisma migrations are delivered in milestone M1; do not start M1 work until the M0 checks in the GitHub project pass.
+Open <http://localhost:3000>. Set `ADMIN_EMAIL`, `ADMIN_NAME`, and a unique `ADMIN_PASSWORD` of at least 12 characters in `apps/api/.env` before seeding. Keep this account password private.
 
 ## Useful commands
 
 ```sh
 corepack pnpm dev:web
+corepack pnpm dev:api
+corepack pnpm --filter api test
+corepack pnpm --filter api test:e2e
+corepack pnpm --filter api exec prisma migrate status
 corepack pnpm build:web
 docker compose -f infra/docker-compose.yml ps
 docker compose -f infra/docker-compose.yml logs -f postgres
