@@ -1,1 +1,23 @@
-{"name":"hotel-business-manager","private":true,"packageManager":"pnpm@9.15.0","scripts":{"dev":"turbo dev","build":"turbo build","lint":"turbo lint","test":"turbo test"},"devDependencies":{"turbo":"^2.3.3","typescript":"^5.7.2"}}
+{
+  "name": "hotel-business-manager",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev": "corepack pnpm --filter web dev",
+    "dev:web": "corepack pnpm --filter web dev",
+    "build": "corepack pnpm --filter web build",
+    "build:web": "corepack pnpm --filter web build",
+    "lint": "corepack pnpm --filter web lint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "turbo test"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^14.2.21",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.4.2",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2"
+  }
+}

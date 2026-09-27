@@ -1,3 +1,3 @@
 # API
 
-NestJS API and Prisma/PostgreSQL schema. Copy `.env.example` to `.env`; run migration and seed commands from the root. Swagger documentation is configured at `/api/docs`.
+NestJS API workspace with the Prisma/PostgreSQL schema. The API bootstrap and Swagger setup are delivered in milestone M1. Copy `apps/api/.env.example` to `apps/api/.env` before running Prisma commands or starting the API.

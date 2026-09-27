@@ -1,3 +1,3 @@
 # Web
 
-Next.js frontend workspace. API backed operational screens are the next implementation step.
+Next.js App Router frontend workspace. Run `pnpm dev:web` from the repository root to start the local frontend at <http://localhost:3000>.

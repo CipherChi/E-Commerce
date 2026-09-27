@@ -1,13 +1,20 @@
 # Hotel / Short-let Business Manager
 
-Phase 1 monorepo for reservation-to-cash operations. The intended stack is NestJS, Prisma, PostgreSQL, and Next.js. Manual payments only; no Paystack, Termii, WhatsApp, or offline sync implementation.
+Phase 1 monorepo for reservation-to-cash operations, built with Next.js, NestJS, Prisma, and PostgreSQL. Payments are recorded manually. Paystack, Termii, WhatsApp, and offline sync remain out of scope until Phase 2.
 
-## Setup
+## Requirements
 
-1. Install Node 20+ and pnpm.
-2. `docker compose -f infra/docker-compose.yml up -d`
-3. Copy `.env.example` to `.env` and run `pnpm install`.
-4. Run `pnpm --filter api prisma:migrate` and `pnpm --filter api prisma:seed`.
-5. Start the API and web app with `pnpm --filter api start:dev` and `pnpm --filter web dev`.
+- Node.js 20 or newer
+- pnpm 9
+- Docker Desktop with the Linux container engine running
 
-See each app README for details. Do not use demo credentials in production.
+## Local setup
+
+1. Install dependencies with `corepack pnpm install`.
+2. Copy `.env.example` to `.env`.
+3. Start PostgreSQL with `docker compose -f infra/docker-compose.yml up -d postgres`.
+4. Start the web app with `corepack pnpm dev:web` and open <http://localhost:3000>.
+
+The API and Prisma migration workflow are introduced in milestone M1. Until then, the web app runs independently while PostgreSQL is available for database setup work.
+
+See [Development](docs/DEVELOPMENT.md) for setup and troubleshooting, and [Branching](docs/BRANCHING.md) for the Git workflow. Do not use the sample credentials in production.
