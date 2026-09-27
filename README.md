@@ -16,6 +16,6 @@ Phase 1 monorepo for reservation-to-cash operations, built with Next.js, NestJS,
 4. Apply migrations and create the administrator with `corepack pnpm --filter api exec prisma migrate deploy` and `corepack pnpm --filter api prisma:seed`.
 5. Start the API and web app in separate terminals with `corepack pnpm dev:api` and `corepack pnpm dev:web`, then open <http://localhost:3000>.
 
-Sign in with the seeded administrator account to create properties and rooms. New registrations receive the staff role.
+Sign in with the seeded administrator account to create properties and rooms. New registrations receive the staff role. Authenticated staff can register guests and search the directory by name or phone.
 
 See [Development](docs/DEVELOPMENT.md) for setup and troubleshooting, and [Branching](docs/BRANCHING.md) for the Git workflow. Do not use the sample credentials in production.

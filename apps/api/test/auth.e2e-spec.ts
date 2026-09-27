@@ -9,6 +9,7 @@ describe('Auth endpoints', () => {
   const users: any[] = [];
   const properties: any[] = [];
   const rooms: any[] = [];
+  const guests: any[] = [];
   const prisma = {
     user: {
       findUnique: jest.fn(
@@ -85,6 +86,38 @@ describe('Auth endpoints', () => {
       delete: jest.fn(({ where }: any) => {
         const index = rooms.findIndex((entry) => entry.id === where.id);
         return rooms.splice(index, 1)[0];
+      }),
+    },
+    guest: {
+      findMany: jest.fn(({ where }: any) =>
+        guests.filter(
+          (guest) =>
+            !where?.OR ||
+            where.OR.some(
+              (filter: any) =>
+                guest.fullName
+                  .toLowerCase()
+                  .includes(filter.fullName?.contains?.toLowerCase() ?? '\u0000') ||
+                guest.phone.includes(filter.phone?.contains ?? '\u0000'),
+            ),
+        ),
+      ),
+      findUnique: jest.fn(
+        ({ where }: any) => guests.find((guest) => guest.id === where.id) ?? null,
+      ),
+      create: jest.fn(({ data }: any) => {
+        const guest = { id: `guest-${guests.length + 1}`, createdAt: new Date(), ...data };
+        guests.push(guest);
+        return guest;
+      }),
+      update: jest.fn(({ where, data }: any) => {
+        const guest = guests.find((entry) => entry.id === where.id);
+        Object.assign(guest, data);
+        return guest;
+      }),
+      delete: jest.fn(({ where }: any) => {
+        const index = guests.findIndex((entry) => entry.id === where.id);
+        return guests.splice(index, 1)[0];
       }),
     },
     $connect: jest.fn(),
@@ -182,5 +215,30 @@ describe('Auth endpoints', () => {
       .delete(`/properties/${property.body.id}`)
       .set({ Authorization: `Bearer ${staffLogin.body.accessToken}` })
       .expect(403);
+  });
+  it('creates and searches guests by name or phone', async () => {
+    const credentials = {
+      email: 'guest-staff@example.com',
+      name: 'Guest Staff',
+      password: 'password123',
+    };
+    await request(app.getHttpServer()).post('/auth/register').send(credentials).expect(201);
+    const login = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ email: credentials.email, password: credentials.password })
+      .expect(201);
+    const auth = { Authorization: `Bearer ${login.body.accessToken}` };
+    await request(app.getHttpServer())
+      .post('/guests')
+      .set(auth)
+      .send({ fullName: 'Ada Okafor', phone: '+2348012345678' })
+      .expect(201);
+    const byName = await request(app.getHttpServer()).get('/guests?q=ada').set(auth).expect(200);
+    const byPhone = await request(app.getHttpServer())
+      .get('/guests?q=123456')
+      .set(auth)
+      .expect(200);
+    expect(byName.body).toHaveLength(1);
+    expect(byPhone.body[0].fullName).toBe('Ada Okafor');
   });
 });

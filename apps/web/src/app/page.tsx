@@ -40,6 +40,12 @@ export default function HomePage() {
             >
               Manage properties
             </a>
+            <a
+              className="rounded-full border border-ink/15 px-6 py-3 text-sm font-semibold text-ink/75"
+              href="/guests"
+            >
+              Guests
+            </a>
             <span className="rounded-full border border-ink/15 px-6 py-3 text-sm font-medium text-ink/70">
               Local setup preview
             </span>
