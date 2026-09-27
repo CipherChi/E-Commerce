@@ -55,6 +55,12 @@ describe('Cross-business isolation (real Postgres)', () => {
         })
         .expect(201);
       businessIds.push(business.body.id);
+      const membership = await prisma.businessMember.findUniqueOrThrow({
+        where: { businessId_userId: { businessId: business.body.id, userId: user.id } },
+      });
+      console.log(
+        `POST /businesses ${label}: HTTP ${business.status}; body=${JSON.stringify(business.body)}; persistedMember=${JSON.stringify(membership)}`,
+      );
       return { id: user.id, auth, businessId: business.body.id };
     };
 
@@ -165,15 +171,18 @@ describe('Cross-business isolation (real Postgres)', () => {
       const record = resources[entity][0];
       const get = await request(app.getHttpServer()).get(record.path).set('Authorization', tokenA);
       expect(get.status).toBe(404);
+      console.log(`${entity} GET ${record.path}: HTTP ${get.status}`);
       const patch = await request(app.getHttpServer())
         .patch(record.path)
         .set('Authorization', tokenA)
         .send(record.patch);
       expect(patch.status).toBe(404);
+      console.log(`${entity} PATCH ${record.path}: HTTP ${patch.status}`);
       const remove = await request(app.getHttpServer())
         .delete(record.path)
         .set('Authorization', tokenA);
       expect(remove.status).toBe(404);
+      console.log(`${entity} DELETE ${record.path}: HTTP ${remove.status}`);
 
       const where = { id: record.id };
       if (entity === 'customers')
