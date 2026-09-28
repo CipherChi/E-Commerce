@@ -47,7 +47,7 @@ export default function LoginPage() {
       <Link className="text-sm font-bold tracking-[0.18em] text-accent" href="/">
         STAYWISE
       </Link>
-      <section className="mt-8 rounded-3xl border border-ink/10 bg-white p-8 shadow-sm sm:p-10">
+      <section className="auth-card mt-8 rounded-3xl border border-ink/10 p-8 shadow-sm sm:p-10">
         <h1 className="text-3xl font-semibold">Welcome back</h1>
         <p className="mt-2 text-sm text-ink/65">
           Sign in to manage your hotel or short-let operations.

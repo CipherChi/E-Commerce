@@ -31,6 +31,7 @@ describe('AuthService', () => {
       email: user.email,
       name: user.name,
       password: 'password123',
+      primaryType: 'HOTEL' as never,
     });
     expect(prisma.user.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -49,7 +50,7 @@ describe('AuthService', () => {
   it('rejects duplicate registration', async () => {
     prisma.user.findUnique.mockResolvedValue(user);
     await expect(
-      service.register({ email: user.email, name: user.name, password: 'password123' }),
+      service.register({ email: user.email, name: user.name, password: 'password123', primaryType: 'HOTEL' as never }),
     ).rejects.toBeInstanceOf(ConflictException);
   });
 

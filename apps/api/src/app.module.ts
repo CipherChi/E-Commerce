@@ -8,6 +8,12 @@ import { RoomsModule } from './rooms/rooms.module';
 import { CustomersModule } from './customers/customers.module';
 import { BusinessesModule } from './businesses/businesses.module';
 import { TenantRecordsModule } from './tenant-records/tenant-records.module';
+import { CatalogModule } from './catalog/catalog.module';
+import { InventoryModule } from './inventory/inventory.module';
+import { SalesModule } from './sales/sales.module';
+import { ExpensesModule } from './expenses/expenses.module';
+import { DashboardModule } from './dashboard/dashboard.module';
+import { ReceiptsModule } from './receipts/receipts.module';
 
 @Module({
   imports: [
@@ -19,6 +25,12 @@ import { TenantRecordsModule } from './tenant-records/tenant-records.module';
     CustomersModule,
     BusinessesModule,
     TenantRecordsModule,
+    CatalogModule,
+    InventoryModule,
+    SalesModule,
+    ExpensesModule,
+    DashboardModule,
+    ReceiptsModule,
   ],
   controllers: [HealthController],
 })

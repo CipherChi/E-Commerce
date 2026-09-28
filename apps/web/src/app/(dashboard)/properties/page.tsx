@@ -17,6 +17,7 @@ export default function PropertiesPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [flipOnReturn, setFlipOnReturn] = useState(false);
   const load = useCallback(async () => {
     try {
       setProperties(await apiRequest<Property[]>('/properties'));
@@ -30,6 +31,12 @@ export default function PropertiesPage() {
   useEffect(() => {
     void load();
   }, [load]);
+  useEffect(() => {
+    if (sessionStorage.getItem('staywise.propertiesPageFlip') === '1') {
+      sessionStorage.removeItem('staywise.propertiesPageFlip');
+      setFlipOnReturn(true);
+    }
+  }, []);
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formElement = event.currentTarget;
@@ -54,12 +61,12 @@ export default function PropertiesPage() {
     }
   }
   return (
-    <main className="mx-auto min-h-screen w-full max-w-6xl px-6 py-10 sm:px-10">
+    <main className={`mx-auto min-h-screen w-full max-w-6xl px-6 py-10 sm:px-10${flipOnReturn ? ' book-page-enter' : ''}`}>
       <header className="flex items-center justify-between">
         <Link className="text-sm font-bold tracking-[0.18em] text-accent" href="/">
           STAYWISE
         </Link>
-        <Link className="text-sm text-ink/65 hover:text-accent" href="/login">
+        <Link className="nav-link text-sm text-ink/65 hover:text-accent" href="/login">
           Sign in
         </Link>
       </header>
@@ -100,6 +107,7 @@ export default function PropertiesPage() {
             >
               <option value="HOTEL">Hotel</option>
               <option value="SHORTLET">Short-let</option>
+              <option value="APARTMENT">Apartment</option>
             </select>
           </label>
           <button
@@ -122,7 +130,7 @@ export default function PropertiesPage() {
             <div className="grid gap-4">
               {properties.map((property) => (
                 <Link
-                  className="rounded-3xl border border-ink/10 bg-white p-6 transition hover:border-accent/40"
+                  className="card-link rounded-3xl border border-ink/10 bg-white p-6 transition hover:border-accent/40"
                   href={`/properties/${property.id}/rooms`}
                   key={property.id}
                 >
@@ -132,7 +140,11 @@ export default function PropertiesPage() {
                       <p className="mt-1 text-sm text-ink/60">{property.address}</p>
                     </div>
                     <span className="rounded-full bg-paper px-3 py-1 text-xs font-semibold text-accent">
-                      {property.type === 'SHORTLET' ? 'Short-let' : 'Hotel'}
+                      {property.type === 'SHORTLET'
+                        ? 'Short-let'
+                        : property.type === 'APARTMENT'
+                          ? 'Apartment'
+                          : 'Hotel'}
                     </span>
                   </div>
                   <p className="mt-5 text-sm text-ink/60">

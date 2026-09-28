@@ -22,6 +22,7 @@ export default function RegisterPage() {
           name: form.get('name'),
           email: form.get('email'),
           password: form.get('password'),
+          primaryType: form.get('primaryType'),
         }),
       });
       const result = await response.json();
@@ -29,6 +30,7 @@ export default function RegisterPage() {
         throw new Error(
           typeof result.message === 'string' ? result.message : 'Unable to create account',
         );
+      sessionStorage.setItem('staywise.primaryType', String(form.get('primaryType')));
       sessionStorage.setItem('staywise.accessToken', result.accessToken);
       sessionStorage.setItem('staywise.refreshToken', result.refreshToken);
       sessionStorage.setItem('staywise.user', JSON.stringify(result.user));
@@ -45,10 +47,10 @@ export default function RegisterPage() {
       <Link className="text-sm font-bold tracking-[0.18em] text-accent" href="/">
         STAYWISE
       </Link>
-      <section className="mt-8 rounded-3xl border border-ink/10 bg-white p-8 shadow-sm sm:p-10">
+      <section className="auth-card mt-8 rounded-3xl border border-ink/10 p-8 shadow-sm sm:p-10">
         <h1 className="text-3xl font-semibold">Create your account</h1>
         <p className="mt-2 text-sm text-ink/65">
-          Start with your profile, then set up your business.
+          Choose your business type to set up the right catalog and services.
         </p>
         <form className="mt-8 space-y-5" onSubmit={submit}>
           <label className="block text-sm font-medium">
@@ -69,6 +71,12 @@ export default function RegisterPage() {
               autoComplete="email"
               required
             />
+          </label>
+          <label className="block text-sm font-medium">
+            Primary business type
+            <select className="mt-2 w-full rounded-xl border border-ink/15 px-4 py-3" name="primaryType" required defaultValue="HOTEL">
+              <option value="HOTEL">Hotel</option><option value="APARTMENT">Apartment</option><option value="RESTAURANT">Restaurant</option><option value="GYM">Gym</option><option value="SUPERMARKET">Supermarket</option>
+            </select>
           </label>
           <label className="block text-sm font-medium">
             Password

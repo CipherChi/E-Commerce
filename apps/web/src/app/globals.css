@@ -13,3 +13,179 @@ body {
   margin: 0;
   min-height: 100vh;
 }
+
+.app-shell {
+  position: relative;
+  min-height: 100vh;
+  isolation: isolate;
+}
+
+.app-content {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+}
+
+.hero {
+  color: #f1e9d6;
+}
+
+.hero-media {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  background: #17231e url('/images/forest-fallback.jpg') center / cover no-repeat;
+}
+
+.hero-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.hero-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgb(7 11 8 / 45%) 0%, rgb(7 11 8 / 70%) 100%);
+}
+
+body.app-shell:has([data-surface='public']) .hero-scrim {
+  background: linear-gradient(180deg, rgb(7 11 8 / 45%) 0%, rgb(7 11 8 / 70%) 100%);
+}
+
+body.app-shell:has([data-surface='app']) .hero-scrim {
+  background: rgb(7 11 8 / 72%);
+}
+
+.auth-surface {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 2rem 1.5rem;
+}
+
+.auth-content {
+  width: 100%;
+  max-width: 42rem;
+  border-radius: 1.5rem;
+  background: transparent;
+  color: #17231e;
+  box-shadow: 0 1rem 3rem rgb(0 0 0 / 18%);
+}
+
+.auth-content > main {
+  min-height: auto;
+  max-width: none;
+}
+
+.dashboard-surface {
+  min-height: 100vh;
+  padding: 1.5rem;
+}
+
+.dashboard-content {
+  width: 100%;
+  max-width: 80rem;
+  min-height: calc(100vh - 3rem);
+  margin: 0 auto;
+  overflow: auto;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: #17231e;
+  box-shadow: none;
+}
+
+.pill {
+  transition: transform 180ms ease, background-color 180ms ease, border-color 180ms ease,
+    color 180ms ease, box-shadow 180ms ease;
+}
+
+.pill:hover {
+  transform: scale(1.03);
+}
+
+.pill:active {
+  transform: scale(0.98);
+}
+
+.pill:focus-visible {
+  outline: 2px solid #cba55c;
+  outline-offset: 3px;
+}
+
+.pill--solid:hover {
+  background-color: #1b4a34;
+}
+
+.pill--outline:hover {
+  border-color: #cba55c;
+  background-color: rgb(203 165 92 / 14%);
+  color: #f1e9d6;
+}
+
+button, a, .button, .nav-link, .card-link {
+  transition: transform 150ms ease, opacity 150ms ease, color 150ms ease;
+}
+
+button:hover, a:hover, .button:hover, .nav-link:hover, .card-link:hover {
+  transform: translateY(-1px);
+  opacity: 0.88;
+}
+
+button:active, a:active, .button:active, .nav-link:active, .card-link:active {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+button:focus-visible, a:focus-visible, .button:focus-visible, .nav-link:focus-visible, .card-link:focus-visible {
+  outline: 2px solid #CBA55C;
+  outline-offset: 2px;
+}
+
+.app-content .bg-white {
+  background-color: rgba(244, 238, 224, 0.88);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.app-content nav[aria-label='Primary'] {
+  background: rgba(23, 35, 30, 0.9);
+  color: #f1e9d6;
+  backdrop-filter: blur(12px);
+}
+
+.app-content nav[aria-label='Primary'] a { color: #f1e9d6; }
+
+.hero-fallback { background: #17231e url('/images/forest-fallback.jpg') center / cover no-repeat; }
+
+@keyframes book-page-enter {
+  from { opacity: 0; transform: perspective(1400px) rotateY(-78deg); transform-origin: left center; }
+  to { opacity: 1; transform: perspective(1400px) rotateY(0); transform-origin: left center; }
+}
+
+.book-page-enter { animation: book-page-enter 620ms cubic-bezier(.2,.75,.25,1) both; }
+
+.auth-card {
+  background: rgba(244, 238, 224, 0.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.25);
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .auth-content, .auth-card { background: rgba(244, 238, 224, 0.95); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-video { display: none; }
+  .hero-media { background: url('/images/forest-fallback.jpg') center / cover no-repeat; }
+  .pill, button, a, .button, .nav-link, .card-link { transition: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .book-page-enter { animation: none; }
+  button, a, .button, .nav-link, .card-link { transition: none; }
+}

@@ -5,7 +5,7 @@ import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { apiRequest } from '@/lib/api';
 
-type Property = { id: string; name: string; address: string };
+type Property = { id: string; name: string; address: string; type: 'HOTEL' | 'SHORTLET' | 'APARTMENT' };
 type Room = {
   id: string;
   label: string;
@@ -28,6 +28,7 @@ export default function RoomsPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const isApartment = property?.type === 'APARTMENT';
   const load = useCallback(async () => {
     try {
       const [nextProperty, nextRooms] = await Promise.all([
@@ -76,7 +77,11 @@ export default function RoomsPage() {
         <Link className="text-sm font-bold tracking-[0.18em] text-accent" href="/">
           STAYWISE
         </Link>
-        <Link className="text-sm text-accent" href="/properties">
+        <Link
+          className="text-sm text-accent"
+          href="/properties"
+          onClick={() => sessionStorage.setItem('staywise.propertiesPageFlip', '1')}
+        >
           ← Properties
         </Link>
       </header>
@@ -89,24 +94,46 @@ export default function RoomsPage() {
       </div>
       <section className="mt-9 grid gap-8 lg:grid-cols-[0.8fr_1.2fr]">
         <form className="h-fit rounded-3xl border border-ink/10 bg-white p-6" onSubmit={create}>
-          <h2 className="text-xl font-semibold">Add a room</h2>
+          <h2 className="text-xl font-semibold">{isApartment ? 'Add an apartment' : 'Add a room'}</h2>
           <label className="mt-5 block text-sm font-medium">
-            Room label
+            {isApartment ? 'Apartment label' : 'Room label'}
             <input
               className="mt-2 w-full rounded-xl border border-ink/15 px-4 py-3"
               name="label"
-              placeholder="101"
+              key={`${isApartment ? 'apartment' : 'hotel'}-${rooms.length}`}
+              defaultValue={isApartment ? `Apartment ${rooms.length + 1}` : String(101 + rooms.length)}
               required
             />
           </label>
           <label className="mt-4 block text-sm font-medium">
-            Room type
-            <input
+            {isApartment ? 'Bedroom configuration' : 'Room type'}
+            <select
               className="mt-2 w-full rounded-xl border border-ink/15 px-4 py-3"
               name="type"
-              placeholder="Deluxe"
+              key={isApartment ? 'apartment-types' : 'hotel-types'}
+              defaultValue={isApartment ? '1 Bedroom Apartment' : 'Standard'}
               required
-            />
+            >
+              {isApartment ? (
+                <>
+                  <option>Studio Apartment</option>
+                  <option>1 Bedroom Apartment</option>
+                  <option>2 Bedroom Apartment</option>
+                  <option>3 Bedroom Apartment</option>
+                  <option>4 Bedroom Apartment</option>
+                  <option>5 Bedroom Apartment</option>
+                </>
+              ) : (
+                <>
+                  <option>Standard</option>
+                  <option>Deluxe</option>
+                  <option>Executive</option>
+                  <option>Suite</option>
+                  <option>Family Room</option>
+                  <option>Presidential Suite</option>
+                </>
+              )}
+            </select>
           </label>
           <div className="mt-4 grid grid-cols-2 gap-3">
             <label className="text-sm font-medium">
@@ -137,24 +164,24 @@ export default function RoomsPage() {
             disabled={saving}
             type="submit"
           >
-            {saving ? 'Saving…' : 'Add room'}
+            {saving ? 'Saving…' : isApartment ? 'Add apartment' : 'Add room'}
           </button>
         </form>
         <section>
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-xl font-semibold">Rooms</h2>
-            <span className="text-sm text-ink/60">{rooms.length} total</span>
+            <h2 className="text-xl font-semibold">{isApartment ? 'Apartments' : 'Rooms'}</h2>
+            <span className="text-sm text-ink/60">{rooms.length} {isApartment ? 'units' : 'total'}</span>
           </div>
           {loading ? (
             <p className="text-sm text-ink/60">Loading rooms…</p>
           ) : rooms.length === 0 ? (
             <div className="rounded-3xl border border-dashed border-ink/20 p-8 text-sm text-ink/60">
-              No rooms added yet.
+              {isApartment ? 'No apartments added yet.' : 'No rooms added yet.'}
             </div>
           ) : (
             <div className="overflow-hidden rounded-3xl border border-ink/10 bg-white">
               <div className="grid grid-cols-[1fr_1fr_auto] gap-3 border-b border-ink/10 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-ink/50">
-                <span>Room</span>
+                <span>{isApartment ? 'Apartment' : 'Room'}</span>
                 <span>Capacity · Price</span>
                 <span>Status</span>
               </div>

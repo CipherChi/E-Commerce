@@ -18,12 +18,13 @@ export default function BusinessSetupPage() {
         method: 'POST',
         body: JSON.stringify({
           name: form.get('name'),
+          primaryType: sessionStorage.getItem('staywise.primaryType') ?? 'HOTEL',
           phone: form.get('phone') || undefined,
           address: form.get('address') || undefined,
           logo: form.get('logo') || undefined,
         }),
       });
-      window.location.assign('/properties');
+      window.location.assign('/products');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to create your business');
     } finally {
@@ -39,7 +40,7 @@ export default function BusinessSetupPage() {
       <section className="mt-8 rounded-3xl border border-ink/10 bg-white p-8 shadow-sm sm:p-10">
         <h1 className="text-3xl font-semibold">Set up your business</h1>
         <p className="mt-2 text-sm text-ink/65">
-          This business will own your properties, customers, and records.
+          Your primary business type is set during signup. You can enable more modules later in Settings.
         </p>
         <form className="mt-8 space-y-5" onSubmit={submit}>
           <label className="block text-sm font-medium">
