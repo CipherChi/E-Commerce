@@ -166,6 +166,7 @@ model Property {
   createdAt  DateTime     @default(now())
 
   @@unique([id, businessId])
+  @@index([businessId])
 }
 
 model Room {
@@ -183,6 +184,7 @@ model Room {
 
   @@unique([propertyId, label])
   @@unique([id, businessId])
+  @@index([businessId])
 }
 
 model Customer {
@@ -202,6 +204,7 @@ model Customer {
   business   Business  @relation(fields: [businessId], references: [id])
 
   @@unique([id, businessId])
+  @@index([businessId, name])
 }
 
 model CatalogCategory {
@@ -252,6 +255,7 @@ model StockMovement {
   createdBy   User              @relation(fields: [createdById], references: [id])
 
   @@index([businessId, productId, createdAt])
+  @@index([saleId])
 }
 
 model Sale {
@@ -341,6 +345,7 @@ model Booking {
 
   @@unique([id, businessId])
   @@index([roomId, checkIn, checkOut])
+  @@index([businessId])
 }
 
 model Payment {
@@ -355,6 +360,7 @@ model Payment {
   booking      Booking       @relation(fields: [bookingId, businessId], references: [id, businessId])
   recordedBy   User          @relation("RecordedBy", fields: [recordedById], references: [id])
   business     Business      @relation(fields: [businessId], references: [id])
+  @@index([businessId])
 }
 
 model Invoice {
@@ -372,6 +378,7 @@ model Invoice {
   business      Business      @relation(fields: [businessId], references: [id])
 
   @@unique([bookingId, businessId])
+  @@index([businessId])
 }
 
 model ActivityLog {

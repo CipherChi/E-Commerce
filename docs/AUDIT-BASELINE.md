@@ -5,7 +5,7 @@ Date: 2026-09-28. Starting commit: `5ac8d32` (`codex/ambient-video-appwide`). St
 ## Baseline gates (before implementation changes)
 
 - `pnpm install --frozen-lockfile`: failed, `ERR_PNPM_IGNORED_BUILDS`; host's globally selected pnpm is 11.19.0 and requires approval for dependency build scripts. `corepack pnpm --version` reports the repo-pinned 9.15.0. Frozen install reported lockfile current and packages already installed before failing on ignored build scripts.
-- `corepack pnpm build`: started; API build completed and web production build was still running at audit capture. Final result must be appended after the process completes.
+- `corepack pnpm build`: passed; API Nest build and Next.js production build completed (16 routes generated).
 - `corepack pnpm lint`: passed, Next reports no ESLint warnings/errors.
 - `corepack pnpm --filter api test -- --runInBand`: passed, 5 suites / 17 tests.
 - Docker Compose Postgres 16 was already healthy at localhost:5432.
@@ -16,7 +16,7 @@ Date: 2026-09-28. Starting commit: `5ac8d32` (`codex/ambient-video-appwide`). St
 
 - `.github/workflows/ci.yml` exists as pre-existing untracked content. It pins pnpm 9.15.0 and defines install/lint/build, empty Postgres migrations/drift, unit coverage, real Postgres API e2e, conditional Playwright, dependency audit, and aggregate `CI passed`. Coverage floor is 9%. Its presence differs from the older audit claim that no workflow exists.
 - `apps/api/src/health.controller.ts` exposes `GET /health`, but it only returns `{status:"ok"}` and does not ping the database.
-- Registration requires password length 12 in `apps/api/src/auth/dto/register.dto.ts`; `apps/api/test/auth.e2e-spec.ts` uses a shorter happy-path password and therefore conflicts with the policy. Auth e2e uses mocked Prisma.
+- At baseline registration allowed 8-character passwords (`MinLength(8)`), while setup documentation requires a 12-character administrator password. Both auth and tenant e2e happy-path registration omitted the required `primaryType` field. The tenant suite fails with HTTP 400 at registration; the missing field is the evident DTO mismatch. Auth e2e uses mocked Prisma.
 - `apps/api/test/tenant-isolation.e2e-spec.ts` uses real Prisma/Postgres and refuses to run without `TENANT_TEST_DATABASE_URL`. It exercises cross-tenant get/update/delete for Customer, Property, Room, Booking, Payment, Invoice and customer list/search. It does not yet cover business modules, catalog, inventory, stock movements, sales, receipts, expenses, dashboard, or BusinessModule list/get/update/delete. Thus this differs from the stale summary: real-DB tenant spec is present, not never implemented.
 - `User.refreshTokenHash` and `tokenVersion` exist in `apps/api/prisma/schema.prisma`; passwordHash is used. `main.ts` enables `whitelist`, `forbidNonWhitelisted`, and transform. No throttler dependency/rate limit was found in package metadata.
 - `BookingStatus` has PENDING, CONFIRMED, CHECKED_IN, CHECKED_OUT, CANCELLED; no NO_SHOW. Booking and payment/invoice models already exist; invoice stores mutable amountPaid/balance/status. Booking APIs remain generic tenant-record routes, without dedicated create/list/state-machine/overlap endpoints. Money columns use Prisma Decimal.
@@ -54,3 +54,6 @@ Baseline result updates:
 - `corepack pnpm build`: pending web production build at last poll; API Nest build passed.
 - `corepack pnpm lint`: passed.
 - Real Postgres migration deploy applied all 7 migrations successfully to `hotel_manager_test`. Tenant e2e then failed: all 7 tests error during setup because registration returned 400; its password `tenant-test-password-123` is shorter than the 12-character DTO rule. This confirms the stale audit finding about auth/e2e policy mismatch, but also confirms the tenant spec is wired to real Postgres.
+
+
+Audit correction after tracing the failed request: the tenant test password was not too short (the baseline rule was 8 characters). Registration also requires `primaryType`; both e2e happy paths omitted it. Batch 1 raises the registration minimum to 12, consistent with setup docs, adds `primaryType` in the test requests, and adds a focused short-password rejection assertion.

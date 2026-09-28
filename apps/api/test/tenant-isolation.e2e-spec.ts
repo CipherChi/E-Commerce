@@ -35,7 +35,7 @@ describe('Cross-business isolation (real Postgres)', () => {
       const password = 'tenant-test-password-123';
       await request(app.getHttpServer())
         .post('/auth/register')
-        .send({ email, password, name: label })
+        .send({ email, password, name: label, primaryType: 'HOTEL' })
         .expect(201);
       const user = await prisma.user.findUniqueOrThrow({ where: { email } });
       userIds.push(user.id);
@@ -50,6 +50,7 @@ describe('Cross-business isolation (real Postgres)', () => {
         .set(auth)
         .send({
           name: `Isolation ${label} ${suffix}`,
+          primaryType: 'HOTEL',
           phone: '+2348000000000',
           address: 'Test address',
         })
