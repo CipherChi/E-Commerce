@@ -20,13 +20,13 @@ This report covers `release/m0-m10` plus Batch 2 on `feat/batch-2-bookings`. It 
 
 ## Commands and results
 
-- Fresh temp clone: `git clone --local --branch fix/batch-1-foundation C:\src\hotel-business-manager <temp-path>` then `corepack pnpm install --frozen-lockfile` — passed with pinned pnpm 9.15.0. Required build scripts ran; pnpm ignored only optional `unrs-resolver`.
+- Fresh temp clone: `git clone --local --branch feat/batch-2-bookings C:\src\hotel-business-manager <temp-path>` then `corepack pnpm install --frozen-lockfile` — passed with pnpm 9.15.0. Required build scripts ran; pnpm ignored only optional `unrs-resolver`.
 - `corepack pnpm build` — passed; API and Next.js production build completed.
 - `corepack pnpm lint` — passed; no ESLint warnings/errors.
 - `corepack pnpm --filter api exec jest --coverage --ci --runInBand` — passed, 9 suites / 65 tests, 13.95% statements. The CI/Jest floor is 13%, rounded down from measured coverage (raised from 10%).
 - `corepack pnpm --filter api test:e2e:auth` — passed, 1 suite / 5 tests.
-- With `TENANT_TEST_DATABASE_URL` and `DATABASE_URL` set to `hotel_manager_batch2_empty`: `corepack pnpm --filter api test:e2e` — passed, 3 suites / 22 tests. The tenant-isolation and booking suites use real Postgres; only the auth endpoint suite uses its existing Prisma mock.
-- Fresh database `hotel_manager_batch2_empty`: `prisma migrate deploy` applied all 11 migrations, including the split `NO_SHOW` enum migration and hand-written `btree_gist` exclusion constraint; `prisma migrate diff --from-url ... --to-schema-datamodel prisma/schema.prisma --exit-code` reported `No difference detected.`
+- `$env:TENANT_TEST_DATABASE_URL='postgresql://postgres:postgres@localhost:5432/hotel_manager_batch2_final_empty?schema=public'; $env:DATABASE_URL=$env:TENANT_TEST_DATABASE_URL; corepack pnpm --filter api test:e2e` — passed, 3 suites / 22 tests. Tenant-isolation and booking suites use real Postgres; only the auth endpoint suite uses its existing Prisma mock.
+- Fresh database `hotel_manager_batch2_final_empty`: `corepack pnpm --filter api exec prisma migrate deploy` applied all 11 migrations, including the split `NO_SHOW` enum migration and hand-written `btree_gist` exclusion constraint; `corepack pnpm --filter api exec prisma migrate diff --from-url $env:DATABASE_URL --to-schema-datamodel prisma/schema.prisma --exit-code` reported `No difference detected.`
 - Playwright — not run; no config/spec exists.
 
 ## Decisions
