@@ -16,7 +16,7 @@ permissions:
 env:
   NODE_VERSION: "20"
   PNPM_VERSION: "9.15.0"
-  COVERAGE_MIN: "9"
+  COVERAGE_MIN: "10"
 
 jobs:
   build:
