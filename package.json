@@ -2,6 +2,16 @@
   "name": "hotel-business-manager",
   "private": true,
   "packageManager": "pnpm@9.15.0",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@nestjs/core",
+      "@prisma/client",
+      "@prisma/engines",
+      "argon2",
+      "esbuild",
+      "prisma"
+    ]
+  },
   "scripts": {
     "dev": "corepack pnpm --filter web dev",
     "dev:web": "corepack pnpm --filter web dev",

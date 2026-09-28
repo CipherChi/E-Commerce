@@ -11,7 +11,7 @@
 From the repository root:
 
 ```sh
-corepack pnpm install
+corepack pnpm install --frozen-lockfile
 cp .env.example .env
 cp apps/api/.env.example apps/api/.env
 docker compose -f infra/docker-compose.yml up -d postgres

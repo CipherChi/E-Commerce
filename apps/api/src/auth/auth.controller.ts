@@ -6,18 +6,28 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { RefreshDto } from './dto/refresh.dto';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
   constructor(private auth: AuthService) {}
-  @Post('register') register(@Body() dto: RegisterDto) {
+  @Post('register')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  register(@Body() dto: RegisterDto) {
     return this.auth.register(dto);
   }
-  @Post('login') login(@Body() dto: LoginDto) {
+  @Post('login')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  login(@Body() dto: LoginDto) {
     return this.auth.login(dto);
   }
-  @Post('refresh') refresh(@Body() body: RefreshDto) {
+  @Post('refresh')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  refresh(@Body() body: RefreshDto) {
     const [header, payload, signature] = body.refreshToken.split('.');
     if (!header || !payload || !signature) return this.auth.refresh('', body.refreshToken);
     try {

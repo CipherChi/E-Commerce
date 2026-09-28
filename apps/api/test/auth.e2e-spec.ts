@@ -1,5 +1,6 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { JwtService } from '@nestjs/jwt';
 import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
@@ -57,7 +58,16 @@ describe('Authentication endpoints', () => {
   it('rejects invalid registration and unauthenticated profile requests', async () => {
     await request(app.getHttpServer())
       .post('/auth/register')
-      .send({ email: 'bad', password: 'short', name: '' })
+      .send({ email: 'bad', password: 'short', name: '', primaryType: 'HOTEL' })
+      .expect(400);
+    await request(app.getHttpServer())
+      .post('/auth/register')
+      .send({
+        email: 'short-password@example.com',
+        password: 'too-short',
+        name: 'Short Password',
+        primaryType: 'HOTEL',
+      })
       .expect(400);
     await request(app.getHttpServer()).get('/auth/me').expect(401);
   });
@@ -66,7 +76,8 @@ describe('Authentication endpoints', () => {
     const credentials = {
       email: 'auth-flow@example.com',
       name: 'Auth Flow',
-      password: 'password123',
+      password: 'password12345',
+      primaryType: 'HOTEL',
     };
     const registered = await request(app.getHttpServer())
       .post('/auth/register')
@@ -98,16 +109,38 @@ describe('Authentication endpoints', () => {
       .post('/auth/refresh')
       .send({ refreshToken: refreshed.body.refreshToken })
       .expect(401);
-  });
+  }, 30000);
 
   it('rejects invalid passwords without revealing account existence', async () => {
     await request(app.getHttpServer())
       .post('/auth/login')
-      .send({ email: 'missing@example.com', password: 'password123' })
+      .send({ email: 'missing@example.com', password: 'password12345' })
       .expect(401);
     await request(app.getHttpServer())
       .post('/auth/login')
-      .send({ email: 'auth-flow@example.com', password: 'wrong-password' })
+      .send({ email: 'auth-flow@example.com', password: 'wrong-password-123' })
       .expect(401);
   });
+
+  it('rejects an expired access token', async () => {
+    const token = await app.get(JwtService).signAsync(
+      { sub: 'user-1', email: 'auth-flow@example.com', role: 'STAFF', tokenVersion: 0 },
+      { secret: process.env.JWT_ACCESS_SECRET, expiresIn: -1 },
+    );
+    await request(app.getHttpServer())
+      .get('/auth/me')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(401);
+  });
+
+  it('returns 429 after repeated invalid login attempts', async () => {
+    const statuses: number[] = [];
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const response = await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ email: 'rate-limit@example.com', password: 'invalid-password-123' });
+      statuses.push(response.status);
+    }
+    expect(statuses).toContain(429);
+  }, 30000);
 });

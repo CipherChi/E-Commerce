@@ -14,10 +14,12 @@ import { SalesModule } from './sales/sales.module';
 import { ExpensesModule } from './expenses/expenses.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { ReceiptsModule } from './receipts/receipts.module';
+import { validateEnvironment } from './config/env.validation';
+import { ActivityLogsModule } from './activity-logs/activity-logs.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({ isGlobal: true, validate: validateEnvironment }),
     PrismaModule,
     AuthModule,
     PropertiesModule,
@@ -31,6 +33,7 @@ import { ReceiptsModule } from './receipts/receipts.module';
     ExpensesModule,
     DashboardModule,
     ReceiptsModule,
+    ActivityLogsModule,
   ],
   controllers: [HealthController],
 })
