@@ -198,6 +198,27 @@ export class BookingsService {
         const totalAmount = stayChanged
           ? room.basePrice.mul(new Prisma.Decimal(nightsBetween(checkIn, checkOut)))
           : existing.totalAmount;
+        if (stayChanged) {
+          const invoice = await tx.invoice.findFirst({
+            where: { bookingId: id, businessId },
+            include: { booking: { include: { payments: true } } },
+          });
+          if (invoice && invoice.booking.payments.length && !invoice.totalAmount.equals(totalAmount)) {
+            throw new ConflictException('A booking with recorded payments cannot be repriced');
+          }
+          if (invoice && !invoice.booking.payments.length) {
+            await tx.invoice.update({
+              where: { id: invoice.id },
+              data: {
+                totalAmount,
+                amountPaid: new Prisma.Decimal(0),
+                balance: totalAmount,
+                status: 'UNPAID',
+                items: [{ description: 'Room stay', amount: totalAmount.toString() }],
+              },
+            });
+          }
+        }
         const updated = await tx.booking.updateMany({
           where: { id, businessId, status: existing.status },
           data: {
@@ -224,8 +245,15 @@ export class BookingsService {
   }
 
   async remove(businessId: string, id: string) {
-    const result = await this.prisma.booking.deleteMany({ where: { id, businessId } });
-    if (!result.count) throw new NotFoundException('Booking not found');
+    const booking = await this.prisma.booking.findFirst({ where: { id, businessId } });
+    if (!booking) throw new NotFoundException('Booking not found');
+    if (booking.status === BookingStatus.PENDING || booking.status === BookingStatus.CONFIRMED || booking.status === BookingStatus.CHECKED_IN) {
+      throw new ConflictException('Active bookings cannot be deleted; cancel or check out the booking first');
+    }
+    const result = await this.prisma.booking.deleteMany({
+      where: { id, businessId, status: booking.status },
+    });
+    if (!result.count) throw new ConflictException('Booking changed during deletion; retry');
     return { success: true };
   }
 

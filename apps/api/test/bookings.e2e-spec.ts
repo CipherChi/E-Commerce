@@ -11,6 +11,7 @@ if (!databaseUrl)
 process.env.DATABASE_URL = databaseUrl;
 process.env.JWT_ACCESS_SECRET = 'booking-test-access-secret';
 process.env.JWT_REFRESH_SECRET = 'booking-test-refresh-secret';
+process.env.TZ = 'Africa/Lagos';
 
 describe('Booking engine (real Postgres)', () => {
   let app: INestApplication;
@@ -73,7 +74,7 @@ describe('Booking engine (real Postgres)', () => {
     const room = await request(app.getHttpServer())
       .post(`/properties/${propertyId}/rooms`)
       .set('Authorization', token)
-      .send({ label: '101', type: 'Standard', capacity: 2, basePrice: 100.25 })
+      .send({ label: '101', type: 'Standard', capacity: 2, basePrice: '100.25' })
       .expect(201);
     roomId = room.body.id;
     const customer = await request(app.getHttpServer())
@@ -144,6 +145,48 @@ describe('Booking engine (real Postgres)', () => {
     await createBooking('2031-02-20', '2031-02-22').expect(201);
   });
 
+  it('round-trips DATE values as Lagos calendar dates and protects booking totals and active bookings', async () => {
+    const booking = await createBooking('2031-02-24', '2031-02-25').expect(201);
+    expect(booking.body.checkIn).toBe('2031-02-24T00:00:00.000Z');
+    expect(booking.body.checkOut).toBe('2031-02-25T00:00:00.000Z');
+    await request(app.getHttpServer()).patch(`/bookings/${booking.body.id}`).set('Authorization', token)
+      .send({ totalAmount: '0.01', status: 'CANCELLED' }).expect(400);
+    await request(app.getHttpServer()).delete(`/bookings/${booking.body.id}`).set('Authorization', token).expect(409);
+
+    await prisma.room.update({ where: { id: roomId }, data: { basePrice: '150.00' } });
+    expect((await prisma.booking.findUniqueOrThrow({ where: { id: booking.body.id } })).totalAmount.toString()).toBe('100.25');
+    const changedStay = await request(app.getHttpServer()).patch(`/bookings/${booking.body.id}`).set('Authorization', token)
+      .send({ checkIn: '2031-02-23', checkOut: '2031-02-25' }).expect(200);
+    expect(changedStay.body.totalAmount).toBe('300');
+    expect(changedStay.body.checkIn).toBe('2031-02-23T00:00:00.000Z');
+    await prisma.room.update({ where: { id: roomId }, data: { basePrice: '500.00' } });
+    expect((await prisma.booking.findUniqueOrThrow({ where: { id: booking.body.id } })).totalAmount.toString()).toBe('300');
+    const repricedRoom = await prisma.room.create({ data: { businessId, propertyId, label: '998', type: 'Standard', capacity: 2, basePrice: '250.00' } });
+    const moved = await request(app.getHttpServer()).patch(`/bookings/${booking.body.id}`).set('Authorization', token).send({ roomId: repricedRoom.id }).expect(200);
+    expect(moved.body.totalAmount).toBe('500');
+  });
+
+  it('rejects booking a room that is out of service', async () => {
+    const room = await prisma.room.create({ data: { businessId, propertyId, label: '999', type: 'Standard', capacity: 2, basePrice: '100', status: 'MAINTENANCE' } });
+    await createBooking('2031-02-26', '2031-02-27', room.id).expect(422);
+  });
+
+  it('serializes concurrent check-in and check-in versus cancellation', async () => {
+    const confirmed = await createBooking('2031-06-10', '2031-06-11').expect(201);
+    await request(app.getHttpServer()).post(`/bookings/${confirmed.body.id}/confirm`).set('Authorization', token).expect(201);
+    const checkIns = await Promise.all(Array.from({ length: 2 }, () => request(app.getHttpServer()).post(`/bookings/${confirmed.body.id}/check-in`).set('Authorization', token)));
+    expect(checkIns.map(x => x.status).sort()).toEqual([201, 409]);
+
+    const race = await createBooking('2031-06-12', '2031-06-13').expect(201);
+    await request(app.getHttpServer()).post(`/bookings/${race.body.id}/confirm`).set('Authorization', token).expect(201);
+    const results = await Promise.all([
+      request(app.getHttpServer()).post(`/bookings/${race.body.id}/check-in`).set('Authorization', token),
+      request(app.getHttpServer()).post(`/bookings/${race.body.id}/cancel`).set('Authorization', token),
+    ]);
+    expect(results.filter(x => x.status === 201)).toHaveLength(1);
+    expect(results.filter(x => x.status === 409)).toHaveLength(1);
+  });
+
   it('allows exactly one of concurrent overlapping creates and returns 409 for all others', async () => {
     const results = await Promise.all(
       Array.from({ length: 8 }, () => createBooking('2031-03-01', '2031-03-04')),
@@ -165,7 +208,7 @@ describe('Booking engine (real Postgres)', () => {
     const secondRoom = await request(app.getHttpServer())
       .post(`/properties/${propertyId}/rooms`)
       .set('Authorization', token)
-      .send({ label: '102', type: 'Standard', capacity: 2, basePrice: 200 })
+      .send({ label: '102', type: 'Standard', capacity: 2, basePrice: '200' })
       .expect(201);
     const candidate = await createBooking('2031-05-10', '2031-05-12', secondRoom.body.id).expect(
       201,
@@ -225,4 +268,45 @@ describe('Booking engine (real Postgres)', () => {
     expect(result.body).toMatchObject({ total: 1, page: 1, pageSize: 1 });
     expect(result.body.data[0].id).toBe(booking.body.id);
   });
+
+  it('creates invoices, derives payment balances, serializes concurrent overpayments, and is idempotent by reference', async () => {
+    const paymentRoom = await prisma.room.create({ data: { businessId, propertyId, label: 'payment-test', type: 'Standard', capacity: 2, basePrice: '100.25' } });
+    const booking = await createBooking('2031-08-01', '2031-08-02', paymentRoom.id).expect(201);
+    const invoice = await request(app.getHttpServer()).post(`/bookings/${booking.body.id}/invoice`).set('Authorization', token).expect(201);
+    expect(invoice.body).toMatchObject({ status: 'UNPAID', balance: '100.25', amountPaid: '0' });
+    await request(app.getHttpServer()).patch(`/invoices/${invoice.body.id}`).set('Authorization', token).send({ status: 'PAID' }).expect(400);
+    const concurrent = await Promise.all([
+      request(app.getHttpServer()).post(`/invoices/${invoice.body.id}/payments`).set('Authorization', token).send({ amount: '60.00', method: 'CASH' }),
+      request(app.getHttpServer()).post(`/invoices/${invoice.body.id}/payments`).set('Authorization', token).send({ amount: '60.00', method: 'CASH' }),
+    ]);
+    expect(concurrent.map(result => result.status).sort()).toEqual([201, 409]);
+    const partial = await request(app.getHttpServer()).get(`/invoices/${invoice.body.id}`).set('Authorization', token).expect(200);
+    expect(partial.body.status).toBe('PARTIAL');
+    expect(partial.body.balance).toBe('40.25');
+    const dashboardPartial = await request(app.getHttpServer()).get('/dashboard/summary').set('Authorization', token).expect(200);
+    expect(dashboardPartial.body).toMatchObject({ collectedPayments: '60.00', outstandingPayments: '40.25' });
+    const recorded = await request(app.getHttpServer()).get(`/invoices/${invoice.body.id}/payments`).set('Authorization', token).expect(200);
+    await request(app.getHttpServer()).patch(`/payments/${recorded.body[0].id}`).set('Authorization', token).send({ amount: '0.01' }).expect(400);
+    await request(app.getHttpServer()).delete(`/payments/${recorded.body[0].id}`).set('Authorization', token).expect(400);
+    const repeated = await Promise.all([1, 2].map(() => request(app.getHttpServer()).post(`/invoices/${invoice.body.id}/payments`).set('Authorization', token).send({ amount: '40.25', method: 'TRANSFER', reference: 'same-reference' })));
+    expect(repeated.map(result => result.status)).toEqual([201, 201]);
+    expect((await prisma.payment.count({ where: { bookingId: booking.body.id, reference: 'same-reference' } })).toString()).toBe('1');
+    const paid = await request(app.getHttpServer()).get(`/invoices/${invoice.body.id}`).set('Authorization', token).expect(200);
+    expect(paid.body).toMatchObject({ status: 'PAID', balance: '0' });
+    const dashboardPaid = await request(app.getHttpServer()).get('/dashboard/summary').set('Authorization', token).expect(200);
+    expect(dashboardPaid.body).toMatchObject({ collectedPayments: '100.25', outstandingPayments: '0.00' });
+    await request(app.getHttpServer()).delete(`/invoices/${invoice.body.id}`).set('Authorization', token).expect(400);
+  });
+
+  it('keeps an unpaid invoice in sync with booking repricing and blocks repricing after a payment', async () => {
+    const repricedRoom = await prisma.room.create({ data: { businessId, propertyId, label: 'invoice-reprice', type: 'Standard', capacity: 2, basePrice: '75.00' } });
+    const booking = await createBooking('2031-09-01', '2031-09-02', repricedRoom.id).expect(201);
+    const invoice = await request(app.getHttpServer()).post(`/bookings/${booking.body.id}/invoice`).set('Authorization', token).expect(201);
+    await request(app.getHttpServer()).patch(`/bookings/${booking.body.id}`).set('Authorization', token).send({ checkOut: '2031-09-03' }).expect(200);
+    const updatedInvoice = await request(app.getHttpServer()).get(`/invoices/${invoice.body.id}`).set('Authorization', token).expect(200);
+    expect(updatedInvoice.body).toMatchObject({ totalAmount: '150', balance: '150', status: 'UNPAID' });
+    await request(app.getHttpServer()).post(`/invoices/${invoice.body.id}/payments`).set('Authorization', token).send({ amount: '10.00', method: 'CASH' }).expect(201);
+    await request(app.getHttpServer()).patch(`/bookings/${booking.body.id}`).set('Authorization', token).send({ checkOut: '2031-09-04' }).expect(409);
+  });
 });
+

@@ -30,6 +30,7 @@ describe('BookingsService', () => {
     const tx = {
       room: { findFirst: jest.fn(), updateMany: jest.fn() },
       customer: { findFirst: jest.fn() },
+      invoice: { findFirst: jest.fn(), update: jest.fn() },
       booking: {
         create: jest.fn(),
         count: jest.fn(),
@@ -134,6 +135,30 @@ describe('BookingsService', () => {
         checkOut: '2032-02-02',
       }),
     ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('reprices an unpaid invoice atomically when stay dates change', async () => {
+    const { tx, service } = fixture();
+    const booking = { id: 'booking-a', businessId, roomId: room.id, customerId: customer.id, status: BookingStatus.PENDING, checkIn: new Date('2032-02-01T00:00:00Z'), checkOut: new Date('2032-02-02T00:00:00Z'), totalAmount: new Prisma.Decimal('125.25') };
+    tx.booking.findFirst.mockResolvedValue(booking);
+    tx.room.findFirst.mockResolvedValue(room);
+    tx.customer.findFirst.mockResolvedValue(customer);
+    tx.invoice.findFirst.mockResolvedValue({ id: 'invoice-a', totalAmount: booking.totalAmount, booking: { payments: [] } });
+    tx.booking.updateMany.mockResolvedValue({ count: 1 });
+    tx.booking.findFirstOrThrow.mockResolvedValue({ ...booking, checkOut: new Date('2032-02-03T00:00:00Z'), totalAmount: new Prisma.Decimal('250.50') });
+    await service.update(businessId, booking.id, { checkOut: '2032-02-03' });
+    expect(tx.invoice.update).toHaveBeenCalledWith({ where: { id: 'invoice-a' }, data: expect.objectContaining({ totalAmount: new Prisma.Decimal('250.50'), amountPaid: new Prisma.Decimal(0), balance: new Prisma.Decimal('250.50'), status: 'UNPAID' }) });
+  });
+
+  it('rejects a total-changing stay edit after a payment exists', async () => {
+    const { tx, service } = fixture();
+    const booking = { id: 'booking-a', businessId, roomId: room.id, customerId: customer.id, status: BookingStatus.PENDING, checkIn: new Date('2032-02-01T00:00:00Z'), checkOut: new Date('2032-02-02T00:00:00Z'), totalAmount: new Prisma.Decimal('125.25') };
+    tx.booking.findFirst.mockResolvedValue(booking);
+    tx.room.findFirst.mockResolvedValue(room);
+    tx.customer.findFirst.mockResolvedValue(customer);
+    tx.invoice.findFirst.mockResolvedValue({ id: 'invoice-a', totalAmount: booking.totalAmount, booking: { payments: [{ amount: new Prisma.Decimal('10') }] } });
+    await expect(service.update(businessId, booking.id, { checkOut: '2032-02-03' })).rejects.toBeInstanceOf(ConflictException);
+    expect(tx.booking.updateMany).not.toHaveBeenCalled();
   });
 
   it('uses overlap date filters and tenant scoping for a paginated list', async () => {
