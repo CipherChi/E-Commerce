@@ -1,1 +1,10 @@
-{"moduleFileExtensions":["js","json","ts"],"rootDir":"src","testRegex":".*\\.spec\\.ts$","transform":{"^.+\\.(t|j)s$":"ts-jest"},"collectCoverageFrom":["**/*.(t|j)s","!**/coverage/**"],"coverageDirectory":"../coverage","coverageThreshold":{"global":{"statements":10}},"testEnvironment":"node"}
+{
+  "moduleFileExtensions": ["js", "json", "ts"],
+  "rootDir": "src",
+  "testRegex": ".*\\.spec\\.ts$",
+  "transform": { "^.+\\.(t|j)s$": "ts-jest" },
+  "collectCoverageFrom": ["**/*.(t|j)s", "!**/coverage/**"],
+  "coverageDirectory": "../coverage",
+  "coverageThreshold": { "global": { "statements": 13 } },
+  "testEnvironment": "node"
+}
