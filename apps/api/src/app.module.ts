@@ -14,6 +14,7 @@ import { SalesModule } from './sales/sales.module';
 import { ExpensesModule } from './expenses/expenses.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { ReceiptsModule } from './receipts/receipts.module';
+import { BookingsModule } from './bookings/bookings.module';
 import { validateEnvironment } from './config/env.validation';
 import { ActivityLogsModule } from './activity-logs/activity-logs.module';
 
@@ -33,6 +34,7 @@ import { ActivityLogsModule } from './activity-logs/activity-logs.module';
     ExpensesModule,
     DashboardModule,
     ReceiptsModule,
+    BookingsModule,
     ActivityLogsModule,
   ],
   controllers: [HealthController],

@@ -1,5 +1,12 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
-import { BusinessModuleType, Prisma, PrismaClient, Role, SalePaymentStatus, SaleStatus } from '@prisma/client';
+import {
+  BusinessModuleType,
+  Prisma,
+  PrismaClient,
+  Role,
+  SalePaymentStatus,
+  SaleStatus,
+} from '@prisma/client';
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
@@ -9,8 +16,22 @@ const databaseUrl = process.env.TENANT_TEST_DATABASE_URL;
 // This inventory is parsed by tenant-schema-coverage.spec.ts and maps schema
 // ownership to the real-Postgres fixtures and their available HTTP surfaces.
 const schemaTenantCoverageInventory = [
-  'BusinessModule', 'BusinessMember', 'Property', 'Room', 'Customer', 'CatalogCategory', 'Product',
-  'StockMovement', 'Sale', 'SaleItem', 'ExpenseCategory', 'Expense', 'Booking', 'Payment', 'Invoice', 'ActivityLog',
+  'BusinessModule',
+  'BusinessMember',
+  'Property',
+  'Room',
+  'Customer',
+  'CatalogCategory',
+  'Product',
+  'StockMovement',
+  'Sale',
+  'SaleItem',
+  'ExpenseCategory',
+  'Expense',
+  'Booking',
+  'Payment',
+  'Invoice',
+  'ActivityLog',
 ] as const;
 if (!databaseUrl)
   throw new Error('Set TENANT_TEST_DATABASE_URL to a dedicated migrated Postgres test database.');
@@ -23,7 +44,10 @@ describe('Cross-business isolation (real Postgres)', () => {
   let prisma: PrismaClient;
   const businessIds: string[] = [];
   const userIds: string[] = [];
-  const resources: Record<string, { path: string; patch: object; id: string; removePath?: string }[]> = {};
+  const resources: Record<
+    string,
+    { path: string; patch: object; id: string; removePath?: string }[]
+  > = {};
   let tokenA: string;
   let tokenB: string;
   let businessAId: string;
@@ -183,7 +207,9 @@ describe('Cross-business isolation (real Postgres)', () => {
         createdById: memberB.id,
         receiptNumber: `RCPT-TEST-${suffix}`,
         items: {
-          create: [{ productId: product.id, quantity: 1, unitPrice: 4, lineSubtotal: 4, costPrice: 2 }],
+          create: [
+            { productId: product.id, quantity: 1, unitPrice: 4, lineSubtotal: 4, costPrice: 2 },
+          ],
         },
       },
     });
@@ -238,16 +264,34 @@ describe('Cross-business isolation (real Postgres)', () => {
       { id: invoice.id, path: `/invoices/${invoice.id}`, patch: { balance: 0 } },
     ];
     resources.products = [
-      { id: product.id, path: `/catalog/${product.id}`, patch: { name: 'Hijacked product' }, removePath: `/catalog/${product.id}/archive` },
+      {
+        id: product.id,
+        path: `/catalog/${product.id}`,
+        patch: { name: 'Hijacked product' },
+        removePath: `/catalog/${product.id}/archive`,
+      },
     ];
     resources.movements = [
-      { id: product.id, path: `/inventory/${product.id}/movements`, patch: {}, removePath: `/inventory/${product.id}/movements` },
+      {
+        id: product.id,
+        path: `/inventory/${product.id}/movements`,
+        patch: {},
+        removePath: `/inventory/${product.id}/movements`,
+      },
     ];
     resources.expenses = [
-      { id: expense.id, path: `/expenses/${expense.id}`, patch: { categoryId: expenseCategory.id, amount: 1, expenseDate: '2020-01-01' } },
+      {
+        id: expense.id,
+        path: `/expenses/${expense.id}`,
+        patch: { categoryId: expenseCategory.id, amount: 1, expenseDate: '2020-01-01' },
+      },
     ];
     resources.expenseCategories = [
-      { id: expenseCategory.id, path: `/expenses/categories/${expenseCategory.id}`, patch: { name: 'Hijacked category' } },
+      {
+        id: expenseCategory.id,
+        path: `/expenses/categories/${expenseCategory.id}`,
+        patch: { name: 'Hijacked category' },
+      },
     ];
     resources.sales = [
       { id: sale.id, path: `/sales/${sale.id}`, patch: {}, removePath: `/sales/${sale.id}` },
@@ -255,10 +299,23 @@ describe('Cross-business isolation (real Postgres)', () => {
     resources.receipts = [
       { id: sale.id, path: `/receipts/${sale.id}`, patch: {}, removePath: `/receipts/${sale.id}` },
     ];
-    resources.catalogCategories = [{ id: catalogCategory.id, path: '/catalog/categories', patch: {} }];
-    resources.activityLogs = [{ id: activityLog.id, path: '/activity', patch: {}, removePath: '/activity' }];
-    resources.businesses = [{ id: businessId, path: '/businesses/profile', patch: {}, removePath: '/businesses/profile' }];
-    resources.businessModules = [{ id: businessId, path: '/businesses/modules', patch: { module: 'RETAIL', isEnabled: false }, removePath: '/businesses/modules' }];
+    resources.catalogCategories = [
+      { id: catalogCategory.id, path: '/catalog/categories', patch: {} },
+    ];
+    resources.activityLogs = [
+      { id: activityLog.id, path: '/activity', patch: {}, removePath: '/activity' },
+    ];
+    resources.businesses = [
+      { id: businessId, path: '/businesses/profile', patch: {}, removePath: '/businesses/profile' },
+    ];
+    resources.businessModules = [
+      {
+        id: businessId,
+        path: '/businesses/modules',
+        patch: { module: 'RETAIL', isEnabled: false },
+        removePath: '/businesses/modules',
+      },
+    ];
   }, 30000);
 
   afterAll(async () => {
@@ -340,71 +397,328 @@ describe('Cross-business isolation (real Postgres)', () => {
     expect(search.body).toEqual([]);
   });
 
+  it('keeps booking lists tenant scoped and rejects foreign rooms, customers, and booking actions', async () => {
+    const list = await request(app.getHttpServer())
+      .get('/bookings?page=1&pageSize=10')
+      .set('Authorization', tokenA)
+      .expect(200);
+    expect(list.body.data).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: resources.bookings[0].id })]),
+    );
+
+    const memberA = await prisma.businessMember.findFirstOrThrow({
+      where: { businessId: businessAId },
+    });
+    const propertyA = await prisma.property.create({
+      data: {
+        businessId: businessAId,
+        ownerId: memberA.userId,
+        name: 'Business A booking property',
+        address: 'A address',
+      },
+    });
+    const roomA = await prisma.room.create({
+      data: {
+        businessId: businessAId,
+        propertyId: propertyA.id,
+        label: 'A-101',
+        type: 'Standard',
+        capacity: 2,
+        basePrice: new Prisma.Decimal(80),
+      },
+    });
+    const customerA = await prisma.customer.create({
+      data: {
+        businessId: businessAId,
+        name: 'Business A booking customer',
+        phone: '+2348022222222',
+      },
+    });
+    await request(app.getHttpServer())
+      .post('/bookings')
+      .set('Authorization', tokenA)
+      .send({
+        roomId: resources.rooms[0].id,
+        customerId: customerA.id,
+        checkIn: '2031-04-01',
+        checkOut: '2031-04-02',
+      })
+      .expect(404);
+    await request(app.getHttpServer())
+      .post('/bookings')
+      .set('Authorization', tokenA)
+      .send({
+        roomId: roomA.id,
+        customerId: resources.customers[0].id,
+        checkIn: '2031-04-01',
+        checkOut: '2031-04-02',
+      })
+      .expect(404);
+    await request(app.getHttpServer())
+      .post('/bookings')
+      .set('Authorization', tokenA)
+      .send({
+        businessId: resources.businesses[0].id,
+        roomId: roomA.id,
+        customerId: customerA.id,
+        checkIn: '2031-04-01',
+        checkOut: '2031-04-02',
+      })
+      .expect(400);
+
+    for (const action of ['check-in', 'check-out', 'cancel', 'no-show']) {
+      await request(app.getHttpServer())
+        .post(`/bookings/${resources.bookings[0].id}/${action}`)
+        .set('Authorization', tokenA)
+        .expect(404);
+    }
+  });
+
   it('keeps catalog, inventory, sales, receipts, expenses and activity tenant scoped', async () => {
-    const catalog = await request(app.getHttpServer()).get('/catalog').set('Authorization', tokenA).expect(200);
-    const categories = await request(app.getHttpServer()).get('/catalog/categories').set('Authorization', tokenA).expect(200);
-    const stockable = await request(app.getHttpServer()).get('/inventory/products').set('Authorization', tokenA).expect(200);
-    const lowStock = await request(app.getHttpServer()).get('/inventory/low-stock').set('Authorization', tokenA).expect(200);
-    const sales = await request(app.getHttpServer()).get('/sales').set('Authorization', tokenA).expect(200);
-    const expenses = await request(app.getHttpServer()).get('/expenses').set('Authorization', tokenA).expect(200);
-    const expenseCategories = await request(app.getHttpServer()).get('/expenses/categories').set('Authorization', tokenA).expect(200);
-    const summary = await request(app.getHttpServer()).get('/expenses/summary').set('Authorization', tokenA).expect(200);
-    const activity = await request(app.getHttpServer()).get('/activity').set('Authorization', tokenA).expect(200);
-    const dashboard = await request(app.getHttpServer()).get('/dashboard/summary').set('Authorization', tokenA).expect(200);
+    const catalog = await request(app.getHttpServer())
+      .get('/catalog')
+      .set('Authorization', tokenA)
+      .expect(200);
+    const categories = await request(app.getHttpServer())
+      .get('/catalog/categories')
+      .set('Authorization', tokenA)
+      .expect(200);
+    const stockable = await request(app.getHttpServer())
+      .get('/inventory/products')
+      .set('Authorization', tokenA)
+      .expect(200);
+    const lowStock = await request(app.getHttpServer())
+      .get('/inventory/low-stock')
+      .set('Authorization', tokenA)
+      .expect(200);
+    const sales = await request(app.getHttpServer())
+      .get('/sales')
+      .set('Authorization', tokenA)
+      .expect(200);
+    const expenses = await request(app.getHttpServer())
+      .get('/expenses')
+      .set('Authorization', tokenA)
+      .expect(200);
+    const expenseCategories = await request(app.getHttpServer())
+      .get('/expenses/categories')
+      .set('Authorization', tokenA)
+      .expect(200);
+    const summary = await request(app.getHttpServer())
+      .get('/expenses/summary')
+      .set('Authorization', tokenA)
+      .expect(200);
+    const activity = await request(app.getHttpServer())
+      .get('/activity')
+      .set('Authorization', tokenA)
+      .expect(200);
+    const dashboard = await request(app.getHttpServer())
+      .get('/dashboard/summary')
+      .set('Authorization', tokenA)
+      .expect(200);
 
-    expect(catalog.body).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: productBId })]));
-    expect(categories.body).not.toEqual(expect.arrayContaining([expect.objectContaining({ name: 'B private product category' })]));
-    expect(stockable.body).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: productBId })]));
-    expect(lowStock.body).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: productBId })]));
-    expect(sales.body).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: saleBId })]));
-    expect(expenses.body).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: expenseBId })]));
-    expect(expenseCategories.body).not.toEqual(expect.arrayContaining([expect.objectContaining({ name: 'B private expense category' })]));
+    expect(catalog.body).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: productBId })]),
+    );
+    expect(categories.body).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: 'B private product category' })]),
+    );
+    expect(stockable.body).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: productBId })]),
+    );
+    expect(lowStock.body).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: productBId })]),
+    );
+    expect(sales.body).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: saleBId })]),
+    );
+    expect(expenses.body).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: expenseBId })]),
+    );
+    expect(expenseCategories.body).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: 'B private expense category' })]),
+    );
     expect(summary.body.total).toBe(0);
-    expect(activity.body).not.toEqual(expect.arrayContaining([expect.objectContaining({ action: 'private-test-event' })]));
-    expect(dashboard.body).toMatchObject({ revenue: 0, expenses: 0, outstandingPayments: 0, lowStock: 0 });
-    expect(dashboard.body.moduleCards).not.toEqual(expect.arrayContaining([expect.objectContaining({ module: 'RETAIL', value: 1 })]));
+    expect(activity.body).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ action: 'private-test-event' })]),
+    );
+    expect(dashboard.body).toMatchObject({
+      revenue: 0,
+      expenses: 0,
+      outstandingPayments: 0,
+      lowStock: 0,
+    });
+    expect(dashboard.body.moduleCards).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ module: 'RETAIL', value: 1 })]),
+    );
 
-    await request(app.getHttpServer()).get(`/catalog/${productBId}`).set('Authorization', tokenA).expect(404);
-    await request(app.getHttpServer()).patch(`/catalog/${productBId}`).set('Authorization', tokenA).send({ name: 'x' }).expect(404);
-    await request(app.getHttpServer()).post(`/catalog/${productBId}/archive`).set('Authorization', tokenA).expect(404);
-    await request(app.getHttpServer()).get(`/inventory/${productBId}/current`).set('Authorization', tokenA).expect(404);
-    await request(app.getHttpServer()).get(`/inventory/${productBId}/movements`).set('Authorization', tokenA).expect(404);
-    await request(app.getHttpServer()).get(`/sales/${saleBId}`).set('Authorization', tokenA).expect(404);
-    await request(app.getHttpServer()).patch(`/sales/${saleBId}`).set('Authorization', tokenA).send({ guestName: 'Hijacked' }).expect(404);
-    await request(app.getHttpServer()).delete(`/sales/${saleBId}`).set('Authorization', tokenA).expect(404);
-    await request(app.getHttpServer()).patch(`/sales/${saleBId}/items/${saleItemBId}`).set('Authorization', tokenA).send({ quantity: 99 }).expect(404);
-    await request(app.getHttpServer()).delete(`/sales/${saleBId}/items/${saleItemBId}`).set('Authorization', tokenA).expect(404);
-    await request(app.getHttpServer()).get(`/receipts/${saleBId}`).set('Authorization', tokenA).expect(404);
-    await request(app.getHttpServer()).patch(`/receipts/${saleBId}`).set('Authorization', tokenA).send({}).expect(404);
-    await request(app.getHttpServer()).delete(`/receipts/${saleBId}`).set('Authorization', tokenA).expect(404);
-    await request(app.getHttpServer()).patch(`/inventory/${productBId}/movements`).set('Authorization', tokenA).send({ quantity: 99 }).expect(404);
-    await request(app.getHttpServer()).delete(`/inventory/${productBId}/movements`).set('Authorization', tokenA).expect(404);
+    await request(app.getHttpServer())
+      .get(`/catalog/${productBId}`)
+      .set('Authorization', tokenA)
+      .expect(404);
+    await request(app.getHttpServer())
+      .patch(`/catalog/${productBId}`)
+      .set('Authorization', tokenA)
+      .send({ name: 'x' })
+      .expect(404);
+    await request(app.getHttpServer())
+      .post(`/catalog/${productBId}/archive`)
+      .set('Authorization', tokenA)
+      .expect(404);
+    await request(app.getHttpServer())
+      .get(`/inventory/${productBId}/current`)
+      .set('Authorization', tokenA)
+      .expect(404);
+    await request(app.getHttpServer())
+      .get(`/inventory/${productBId}/movements`)
+      .set('Authorization', tokenA)
+      .expect(404);
+    await request(app.getHttpServer())
+      .get(`/sales/${saleBId}`)
+      .set('Authorization', tokenA)
+      .expect(404);
+    await request(app.getHttpServer())
+      .patch(`/sales/${saleBId}`)
+      .set('Authorization', tokenA)
+      .send({ guestName: 'Hijacked' })
+      .expect(404);
+    await request(app.getHttpServer())
+      .delete(`/sales/${saleBId}`)
+      .set('Authorization', tokenA)
+      .expect(404);
+    await request(app.getHttpServer())
+      .patch(`/sales/${saleBId}/items/${saleItemBId}`)
+      .set('Authorization', tokenA)
+      .send({ quantity: 99 })
+      .expect(404);
+    await request(app.getHttpServer())
+      .delete(`/sales/${saleBId}/items/${saleItemBId}`)
+      .set('Authorization', tokenA)
+      .expect(404);
+    await request(app.getHttpServer())
+      .get(`/receipts/${saleBId}`)
+      .set('Authorization', tokenA)
+      .expect(404);
+    await request(app.getHttpServer())
+      .patch(`/receipts/${saleBId}`)
+      .set('Authorization', tokenA)
+      .send({})
+      .expect(404);
+    await request(app.getHttpServer())
+      .delete(`/receipts/${saleBId}`)
+      .set('Authorization', tokenA)
+      .expect(404);
+    await request(app.getHttpServer())
+      .patch(`/inventory/${productBId}/movements`)
+      .set('Authorization', tokenA)
+      .send({ quantity: 99 })
+      .expect(404);
+    await request(app.getHttpServer())
+      .delete(`/inventory/${productBId}/movements`)
+      .set('Authorization', tokenA)
+      .expect(404);
     const catalogCategoryId = resources.catalogCategories[0].id;
-    await request(app.getHttpServer()).get(`/catalog/categories/${catalogCategoryId}`).set('Authorization', tokenA).expect(404);
-    await request(app.getHttpServer()).patch(`/catalog/categories/${catalogCategoryId}`).set('Authorization', tokenA).send({ name: 'Hijacked' }).expect(404);
-    await request(app.getHttpServer()).delete(`/catalog/categories/${catalogCategoryId}`).set('Authorization', tokenA).expect(404);
-    await request(app.getHttpServer()).patch(`/activity/${activityLogBId}`).set('Authorization', tokenA).send({ action: 'Hijacked' }).expect(404);
-    await request(app.getHttpServer()).delete(`/activity/${activityLogBId}`).set('Authorization', tokenA).expect(404);
-    await request(app.getHttpServer()).patch(`/expenses/${expenseBId}`).set('Authorization', tokenA).send({ categoryId: expenseCategoryBId, amount: 1, expenseDate: '2020-01-01' }).expect(404);
-    await request(app.getHttpServer()).delete(`/expenses/${expenseBId}`).set('Authorization', tokenA).expect(404);
-    await request(app.getHttpServer()).patch(`/expenses/categories/${expenseCategoryBId}`).set('Authorization', tokenA).send({ name: 'Hijacked' }).expect(404);
-    await request(app.getHttpServer()).delete(`/expenses/categories/${expenseCategoryBId}`).set('Authorization', tokenA).expect(404);
+    await request(app.getHttpServer())
+      .get(`/catalog/categories/${catalogCategoryId}`)
+      .set('Authorization', tokenA)
+      .expect(404);
+    await request(app.getHttpServer())
+      .patch(`/catalog/categories/${catalogCategoryId}`)
+      .set('Authorization', tokenA)
+      .send({ name: 'Hijacked' })
+      .expect(404);
+    await request(app.getHttpServer())
+      .delete(`/catalog/categories/${catalogCategoryId}`)
+      .set('Authorization', tokenA)
+      .expect(404);
+    await request(app.getHttpServer())
+      .patch(`/activity/${activityLogBId}`)
+      .set('Authorization', tokenA)
+      .send({ action: 'Hijacked' })
+      .expect(404);
+    await request(app.getHttpServer())
+      .delete(`/activity/${activityLogBId}`)
+      .set('Authorization', tokenA)
+      .expect(404);
+    await request(app.getHttpServer())
+      .patch(`/expenses/${expenseBId}`)
+      .set('Authorization', tokenA)
+      .send({ categoryId: expenseCategoryBId, amount: 1, expenseDate: '2020-01-01' })
+      .expect(404);
+    await request(app.getHttpServer())
+      .delete(`/expenses/${expenseBId}`)
+      .set('Authorization', tokenA)
+      .expect(404);
+    await request(app.getHttpServer())
+      .patch(`/expenses/categories/${expenseCategoryBId}`)
+      .set('Authorization', tokenA)
+      .send({ name: 'Hijacked' })
+      .expect(404);
+    await request(app.getHttpServer())
+      .delete(`/expenses/categories/${expenseCategoryBId}`)
+      .set('Authorization', tokenA)
+      .expect(404);
 
-    const profile = await request(app.getHttpServer()).get('/businesses/profile').set('Authorization', tokenA).expect(200);
+    const profile = await request(app.getHttpServer())
+      .get('/businesses/profile')
+      .set('Authorization', tokenA)
+      .expect(200);
     expect(profile.body.name).not.toBe(businessBName);
-    const modules = await request(app.getHttpServer()).get('/businesses/modules').set('Authorization', tokenA).expect(200);
-    expect(modules.body).not.toEqual(expect.arrayContaining([expect.objectContaining({ businessId: resources.businesses[0].id })]));
-    await request(app.getHttpServer()).patch('/businesses/modules').set('Authorization', tokenA).send({ module: 'RETAIL', isEnabled: false }).expect(200);
-    expect((await prisma.businessModule.findUniqueOrThrow({ where: { businessId_module: { businessId: resources.businesses[0].id, module: BusinessModuleType.RETAIL } } })).isEnabled).toBe(true);
-    expect((await prisma.product.findUniqueOrThrow({ where: { id: productBId } })).name).toBe('B private product');
-    expect((await prisma.expense.findUniqueOrThrow({ where: { id: expenseBId } })).amount.toString()).toBe('777');
-    expect((await prisma.expenseCategory.findUniqueOrThrow({ where: { id: expenseCategoryBId } })).name).toBe('B private expense category');
-    expect((await prisma.catalogCategory.findUniqueOrThrow({ where: { id: resources.catalogCategories[0].id } })).name).toBe('B private catalog category');
-    expect((await prisma.sale.findUniqueOrThrow({ where: { id: saleBId } })).status).toBe('COMPLETED');
-    expect((await prisma.activityLog.findFirstOrThrow({ where: { businessId: resources.businesses[0].id } })).action).toBe('private-test-event');
+    const modules = await request(app.getHttpServer())
+      .get('/businesses/modules')
+      .set('Authorization', tokenA)
+      .expect(200);
+    expect(modules.body).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ businessId: resources.businesses[0].id })]),
+    );
+    await request(app.getHttpServer())
+      .patch('/businesses/modules')
+      .set('Authorization', tokenA)
+      .send({ module: 'RETAIL', isEnabled: false })
+      .expect(200);
+    expect(
+      (
+        await prisma.businessModule.findUniqueOrThrow({
+          where: {
+            businessId_module: {
+              businessId: resources.businesses[0].id,
+              module: BusinessModuleType.RETAIL,
+            },
+          },
+        })
+      ).isEnabled,
+    ).toBe(true);
+    expect((await prisma.product.findUniqueOrThrow({ where: { id: productBId } })).name).toBe(
+      'B private product',
+    );
+    expect(
+      (await prisma.expense.findUniqueOrThrow({ where: { id: expenseBId } })).amount.toString(),
+    ).toBe('777');
+    expect(
+      (await prisma.expenseCategory.findUniqueOrThrow({ where: { id: expenseCategoryBId } })).name,
+    ).toBe('B private expense category');
+    expect(
+      (
+        await prisma.catalogCategory.findUniqueOrThrow({
+          where: { id: resources.catalogCategories[0].id },
+        })
+      ).name,
+    ).toBe('B private catalog category');
+    expect((await prisma.sale.findUniqueOrThrow({ where: { id: saleBId } })).status).toBe(
+      'COMPLETED',
+    );
+    expect(
+      (
+        await prisma.activityLog.findFirstOrThrow({
+          where: { businessId: resources.businesses[0].id },
+        })
+      ).action,
+    ).toBe('private-test-event');
   });
 
   it('returns 200 from /health when the real Postgres database is up', async () => {
-    await request(app.getHttpServer()).get('/health').expect(200).expect({ status: 'ok', database: 'ok' });
+    await request(app.getHttpServer())
+      .get('/health')
+      .expect(200)
+      .expect({ status: 'ok', database: 'ok' });
   });
 });
