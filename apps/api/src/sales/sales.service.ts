@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma, SalePaymentStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
+import { deriveInvoiceFinancials } from '../finance/invoice-financials';
 
 @Injectable()
 export class SalesService {
@@ -30,35 +31,35 @@ export class SalesService {
         const productMap = new Map(products.map((item) => [item.id, item]));
         const normalized = dto.items.map((line) => {
           const product = productMap.get(line.productId)!;
-          const unitPrice = Number(product.sellingPrice);
+          const unitPrice = product.sellingPrice;
           return {
             ...line,
             unitPrice,
-            lineSubtotal: Math.round(unitPrice * line.quantity * 100) / 100,
+            lineSubtotal: unitPrice.mul(line.quantity),
           };
         });
-        const subtotal =
-          Math.round(normalized.reduce((sum, line) => sum + line.lineSubtotal, 0) * 100) / 100;
-        const amountPaid =
-          dto.paymentStatus === SalePaymentStatus.PAID
-            ? subtotal
-            : dto.paymentStatus === SalePaymentStatus.UNPAID
-              ? 0
-              : (dto.amountPaid ?? 0);
+        const subtotal = normalized.reduce((sum, line) => sum.plus(line.lineSubtotal), new Prisma.Decimal(0));
+        const amountPaid = new Prisma.Decimal(
+          dto.amountPaid !== undefined
+            ? dto.amountPaid.toString()
+            : dto.paymentStatus === SalePaymentStatus.PAID
+              ? subtotal.toString()
+              : '0',
+        );
+        const tender = deriveInvoiceFinancials(subtotal, [amountPaid]);
         if (
           dto.paymentStatus === SalePaymentStatus.PARTIAL &&
-          (amountPaid <= 0 || amountPaid >= subtotal)
+          tender.status !== 'PARTIAL'
         )
           throw new BadRequestException(
             'Partial payment must be greater than zero and less than the total',
           );
         if (
           dto.paymentStatus === SalePaymentStatus.PAID &&
-          dto.amountPaid !== undefined &&
-          dto.amountPaid !== subtotal
+          tender.status !== 'PAID'
         )
           throw new BadRequestException('Paid sales must have amountPaid equal to the total');
-        if (dto.paymentStatus === SalePaymentStatus.UNPAID && (dto.amountPaid ?? 0) !== 0)
+        if (dto.paymentStatus === SalePaymentStatus.UNPAID && !amountPaid.isZero())
           throw new BadRequestException('Unpaid sales cannot have an amount paid');
 
         for (const [productId, quantity] of requested) {

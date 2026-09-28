@@ -50,7 +50,10 @@ enum PaymentMethod {
 enum InvoiceStatus {
   DRAFT
   ISSUED
+  UNPAID
+  PARTIAL
   PAID
+  VOID
 }
 
 enum BusinessType {

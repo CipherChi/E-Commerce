@@ -1,7 +1,7 @@
-import { IsDateString, IsNumber, IsOptional, IsString, Min, MinLength } from 'class-validator';
+import { IsDateString, IsOptional, IsString, Matches, MinLength } from 'class-validator';
 export class ExpenseDto {
  @IsString() categoryId!: string;
- @IsNumber({ maxDecimalPlaces: 2 }) @Min(0.01) amount!: number;
+ @IsString() @Matches(/^\d+(\.\d{1,2})?$/) amount!: string;
  @IsOptional() @IsString() description?: string;
  @IsDateString() expenseDate!: string;
 }

@@ -283,7 +283,7 @@ describe('Cross-business isolation (real Postgres)', () => {
       {
         id: expense.id,
         path: `/expenses/${expense.id}`,
-        patch: { categoryId: expenseCategory.id, amount: 1, expenseDate: '2020-01-01' },
+        patch: { categoryId: expenseCategory.id, amount: '1.00', expenseDate: '2020-01-01' },
       },
     ];
     resources.expenseCategories = [
@@ -537,19 +537,26 @@ describe('Cross-business isolation (real Postgres)', () => {
     expect(expenseCategories.body).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ name: 'B private expense category' })]),
     );
-    expect(summary.body.total).toBe(0);
+    expect(summary.body.total).toBe('0');
     expect(activity.body).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ action: 'private-test-event' })]),
     );
     expect(dashboard.body).toMatchObject({
-      revenue: 0,
-      expenses: 0,
-      outstandingPayments: 0,
+      revenue: '0.00',
+      expenses: '0.00',
+      outstandingPayments: '0.00',
       lowStock: 0,
     });
     expect(dashboard.body.moduleCards).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ module: 'RETAIL', value: 1 })]),
     );
+    const historicDashboard = await request(app.getHttpServer())
+      .get('/dashboard/summary?date=2030-01-01')
+      .set('Authorization', tokenA)
+      .expect(200);
+    expect(historicDashboard.body.occupancy).toMatchObject({ occupiedRooms: 0, reservedRooms: 0, totalBookableRooms: 1 });
+    expect(historicDashboard.body.arrivalsToday).toBe(0);
+    expect(historicDashboard.body.departuresToday).toBe(0);
 
     await request(app.getHttpServer())
       .get(`/catalog/${productBId}`)
@@ -642,7 +649,7 @@ describe('Cross-business isolation (real Postgres)', () => {
     await request(app.getHttpServer())
       .patch(`/expenses/${expenseBId}`)
       .set('Authorization', tokenA)
-      .send({ categoryId: expenseCategoryBId, amount: 1, expenseDate: '2020-01-01' })
+      .send({ categoryId: expenseCategoryBId, amount: '1.00', expenseDate: '2020-01-01' })
       .expect(404);
     await request(app.getHttpServer())
       .delete(`/expenses/${expenseBId}`)
@@ -720,5 +727,13 @@ describe('Cross-business isolation (real Postgres)', () => {
       .get('/health')
       .expect(200)
       .expect({ status: 'ok', database: 'ok' });
+  });
+
+  it('hides invoice details and rejects payment writes across businesses', async () => {
+    const invoice = resources.invoices[0];
+    await request(app.getHttpServer()).get(invoice.path).set('Authorization', tokenA).expect(404);
+    await request(app.getHttpServer()).get(`${invoice.path}/payments`).set('Authorization', tokenA).expect(404);
+    await request(app.getHttpServer()).post(`${invoice.path}/payments`).set('Authorization', tokenA)
+      .send({ amount: '1.00', method: 'CASH', reference: 'cross-tenant' }).expect(404);
   });
 });

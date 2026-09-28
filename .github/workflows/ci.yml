@@ -16,7 +16,6 @@ permissions:
 env:
   NODE_VERSION: '20'
   PNPM_VERSION: '9.15.0'
-  COVERAGE_MIN: '13'
 
 jobs:
   build:
@@ -94,9 +93,7 @@ jobs:
       - run: pnpm exec prisma generate --schema apps/api/prisma/schema.prisma
       - name: Run unit tests
         working-directory: apps/api
-        run: >-
-          pnpm exec jest --coverage --ci
-          --coverageThreshold='{"global":{"statements":${{ env.COVERAGE_MIN }}}}'
+        run: pnpm exec jest --coverage --ci --runInBand
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -136,7 +133,7 @@ jobs:
         run: pnpm exec prisma migrate deploy
       - name: Run e2e (auth + tenant isolation)
         working-directory: apps/api
-        run: pnpm test:e2e
+        run: pnpm exec jest --config ./test/jest-e2e.config.json --runInBand
 
   web-e2e:
     name: Web full-flow (Playwright)

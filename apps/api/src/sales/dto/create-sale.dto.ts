@@ -5,9 +5,9 @@ import {
   IsArray,
   IsEnum,
   IsInt,
-  IsNumber,
   IsOptional,
   IsString,
+  Matches,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -20,7 +20,7 @@ export class CreateSaleDto {
   @IsOptional() @IsString() guestName?: string;
   @IsEnum(PaymentMethod) paymentMethod!: PaymentMethod;
   @IsEnum(SalePaymentStatus) paymentStatus!: SalePaymentStatus;
-  @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) amountPaid?: number;
+  @IsOptional() @IsString() @Matches(/^\d+(\.\d{1,2})?$/) amountPaid?: string;
   @IsArray()
   @ArrayMinSize(1)
   @ValidateNested({ each: true })

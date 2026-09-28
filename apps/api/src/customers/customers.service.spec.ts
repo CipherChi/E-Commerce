@@ -1,5 +1,6 @@
 import { NotFoundException } from '@nestjs/common';
 import { CustomersService } from './customers.service';
+import { Prisma } from '@prisma/client';
 
 describe('CustomersService', () => {
   const prisma: any = {
@@ -56,5 +57,16 @@ describe('CustomersService', () => {
         data: { archivedAt: expect.any(Date) },
       }),
     );
+  });
+
+  it('derives balance across partial and voided invoices using Decimal', async () => {
+    prisma.customer.findFirst.mockResolvedValue({ id: 'customer-a', bookings: [
+      { totalAmount: new Prisma.Decimal('100'), payments: [{ amount: new Prisma.Decimal('25') }], invoice: { totalAmount: new Prisma.Decimal('100'), status: 'ISSUED' } },
+      { totalAmount: new Prisma.Decimal('80'), payments: [], invoice: { totalAmount: new Prisma.Decimal('80'), status: 'VOID' } },
+      { totalAmount: new Prisma.Decimal('40'), payments: [{ amount: new Prisma.Decimal('10') }], invoice: { totalAmount: new Prisma.Decimal('40'), status: 'ISSUED' } },
+    ] });
+    const result = await service.get('business-a', 'customer-a');
+    expect(result.outstandingBalance).toBe('105.00');
+    expect(result.bookings.map((booking) => booking.invoice?.balance.toString())).toEqual(['75', '0', '30']);
   });
 });

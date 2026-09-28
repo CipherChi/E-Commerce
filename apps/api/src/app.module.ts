@@ -17,6 +17,7 @@ import { ReceiptsModule } from './receipts/receipts.module';
 import { BookingsModule } from './bookings/bookings.module';
 import { validateEnvironment } from './config/env.validation';
 import { ActivityLogsModule } from './activity-logs/activity-logs.module';
+import { PaymentsModule } from './payments/payments.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { ActivityLogsModule } from './activity-logs/activity-logs.module';
     ReceiptsModule,
     BookingsModule,
     ActivityLogsModule,
+    PaymentsModule,
   ],
   controllers: [HealthController],
 })

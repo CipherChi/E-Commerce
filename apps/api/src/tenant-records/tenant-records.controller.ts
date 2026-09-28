@@ -28,10 +28,6 @@ export class TenantRecordsController {
   removePayment(@Req() req: Request & { user: { businessId: string } }, @Param('id') id: string) {
     return this.records.remove('payment', req.user.businessId, id);
   }
-  @Get('invoices/:id')
-  getInvoice(@Req() req: Request & { user: { businessId: string } }, @Param('id') id: string) {
-    return this.records.get('invoice', req.user.businessId, id);
-  }
   @Patch('invoices/:id')
   updateInvoice(
     @Req() req: Request & { user: { businessId: string } },
