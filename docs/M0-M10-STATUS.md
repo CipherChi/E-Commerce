@@ -35,5 +35,5 @@ See [DECISIONS.md](DECISIONS.md) for password policy, Decimal money, camelCase `
 
 ## Manual owner follow-ups
 
-- Push the updated `release/m0-m10` integration base and `feat/batch-2-bookings`, then open a PR against `release/m0-m10`. Hosted CI and branch protection remain unverified. See [REPO-SETTINGS.md](REPO-SETTINGS.md).
+- Open a PR from `feat/batch-2-bookings` against `release/m0-m10`; hosted CI and branch protection remain unverified until the PR and repository settings are reviewed. See [REPO-SETTINGS.md](REPO-SETTINGS.md).
 - Complete the remaining milestones and run Playwright before describing the project as ready for real-world testing.
