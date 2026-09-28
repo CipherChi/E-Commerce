@@ -105,36 +105,38 @@ model User {
 }
 
 model Business {
-  id             String            @id @default(cuid())
-  name           String
-  primaryType    BusinessType       @default(HOTEL)
-  phone          String?
-  address        String?
-  logo           String?
-  createdAt      DateTime          @default(now())
-  members        BusinessMember[]
-  properties     Property[]
-  rooms          Room[]
-  customers      Customer[]
-  bookings       Booking[]
-  payments       Payment[]
-  invoices       Invoice[]
-  categories     CatalogCategory[]
-  products       Product[]
-  stockMovements StockMovement[]
-  sales          Sale[]
+  id                String            @id @default(cuid())
+  name              String
+  primaryType       BusinessType      @default(HOTEL)
+  phone             String?
+  address           String?
+  logo              String?
+  createdAt         DateTime          @default(now())
+  members           BusinessMember[]
+  properties        Property[]
+  rooms             Room[]
+  customers         Customer[]
+  bookings          Booking[]
+  payments          Payment[]
+  invoices          Invoice[]
+  categories        CatalogCategory[]
+  products          Product[]
+  stockMovements    StockMovement[]
+  sales             Sale[]
   expenseCategories ExpenseCategory[]
-  expenses       Expense[]
-  modules        BusinessModule[]
+  expenses          Expense[]
+  modules           BusinessModule[]
+  activityLogs      ActivityLog[]
 }
 
 model BusinessModule {
-  id         String            @id @default(cuid())
+  id         String             @id @default(cuid())
   businessId String
   module     BusinessModuleType
-  isEnabled  Boolean           @default(true)
-  enabledAt  DateTime          @default(now())
-  business  Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  isEnabled  Boolean            @default(true)
+  enabledAt  DateTime           @default(now())
+  business   Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
   @@unique([businessId, module])
   @@index([businessId, isEnabled])
 }
@@ -208,29 +210,29 @@ model Customer {
 }
 
 model CatalogCategory {
-  id         String    @id @default(cuid())
+  id         String   @id @default(cuid())
   businessId String
   name       String
-  business   Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@unique([businessId, name])
   @@unique([id, businessId])
 }
 
 model Product {
-  id                String           @id @default(cuid())
+  id                String             @id @default(cuid())
   businessId        String
   category          String?
   name              String
   module            BusinessModuleType
-  costPrice         Decimal          @db.Decimal(12, 2)
-  sellingPrice      Decimal          @db.Decimal(12, 2)
-  isStockable       Boolean          @default(false)
+  costPrice         Decimal            @db.Decimal(12, 2)
+  sellingPrice      Decimal            @db.Decimal(12, 2)
+  isStockable       Boolean            @default(false)
   lowStockThreshold Int?
-  isArchived        Boolean          @default(false)
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
-  business          Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  isArchived        Boolean            @default(false)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  business          Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
   movements         StockMovement[]
   saleItems         SaleItem[]
 
@@ -305,6 +307,7 @@ model ExpenseCategory {
   isArchived Boolean   @default(false)
   business   Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
   expenses   Expense[]
+
   @@unique([id, businessId])
   @@unique([businessId, name])
 }
@@ -323,6 +326,7 @@ model Expense {
   business    Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
   category    ExpenseCategory @relation(fields: [categoryId, businessId], references: [id, businessId])
   createdBy   User            @relation(fields: [createdById], references: [id])
+
   @@index([businessId, expenseDate, isArchived])
 }
 
@@ -360,6 +364,7 @@ model Payment {
   booking      Booking       @relation(fields: [bookingId, businessId], references: [id, businessId])
   recordedBy   User          @relation("RecordedBy", fields: [recordedById], references: [id])
   business     Business      @relation(fields: [businessId], references: [id])
+
   @@index([businessId])
 }
 
@@ -382,11 +387,15 @@ model Invoice {
 }
 
 model ActivityLog {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   userId     String
+  businessId String?
   action     String
   entityType String
   entityId   String
   meta       Json?
-  createdAt  DateTime @default(now())
+  createdAt  DateTime  @default(now())
+  business   Business? @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, createdAt])
 }

@@ -1,11 +1,17 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
-import { Prisma, PrismaClient, Role } from '@prisma/client';
+import { BusinessModuleType, Prisma, PrismaClient, Role, SalePaymentStatus, SaleStatus } from '@prisma/client';
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 
 const databaseUrl = process.env.TENANT_TEST_DATABASE_URL;
+// This inventory is parsed by tenant-schema-coverage.spec.ts and maps schema
+// ownership to the real-Postgres fixtures and their available HTTP surfaces.
+const schemaTenantCoverageInventory = [
+  'BusinessModule', 'BusinessMember', 'Property', 'Room', 'Customer', 'CatalogCategory', 'Product',
+  'StockMovement', 'Sale', 'SaleItem', 'ExpenseCategory', 'Expense', 'Booking', 'Payment', 'Invoice', 'ActivityLog',
+] as const;
 if (!databaseUrl)
   throw new Error('Set TENANT_TEST_DATABASE_URL to a dedicated migrated Postgres test database.');
 process.env.DATABASE_URL = databaseUrl;
@@ -17,8 +23,17 @@ describe('Cross-business isolation (real Postgres)', () => {
   let prisma: PrismaClient;
   const businessIds: string[] = [];
   const userIds: string[] = [];
-  const resources: Record<string, { path: string; patch: object; id: string }[]> = {};
+  const resources: Record<string, { path: string; patch: object; id: string; removePath?: string }[]> = {};
   let tokenA: string;
+  let tokenB: string;
+  let businessAId: string;
+  let businessBName: string;
+  let productBId: string;
+  let expenseBId: string;
+  let expenseCategoryBId: string;
+  let saleBId: string;
+  let saleItemBId: string;
+  let activityLogBId: string;
 
   beforeAll(async () => {
     const module = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -59,16 +74,17 @@ describe('Cross-business isolation (real Postgres)', () => {
       const membership = await prisma.businessMember.findUniqueOrThrow({
         where: { businessId_userId: { businessId: business.body.id, userId: user.id } },
       });
-      console.log(
-        `POST /businesses ${label}: HTTP ${business.status}; body=${JSON.stringify(business.body)}; persistedMember=${JSON.stringify(membership)}`,
-      );
+      expect(membership.businessId).toBe(business.body.id);
       return { id: user.id, auth, businessId: business.body.id };
     };
 
     const memberA = await makeMember('member-a');
     tokenA = memberA.auth.Authorization;
+    businessAId = memberA.businessId;
     const memberB = await makeMember('member-b');
+    tokenB = memberB.auth.Authorization;
     const businessId = memberB.businessId;
+    businessBName = `Isolation member-b ${suffix}`;
 
     const property = await prisma.property.create({
       data: {
@@ -126,6 +142,79 @@ describe('Cross-business isolation (real Postgres)', () => {
       },
     });
 
+    await prisma.businessModule.create({
+      data: { businessId, module: BusinessModuleType.RETAIL, isEnabled: true },
+    });
+    const catalogCategory = await prisma.catalogCategory.create({
+      data: { businessId, name: 'B private catalog category' },
+    });
+    const product = await prisma.product.create({
+      data: {
+        businessId,
+        category: 'B private product category',
+        name: 'B private product',
+        module: BusinessModuleType.RETAIL,
+        costPrice: new Prisma.Decimal(2),
+        sellingPrice: new Prisma.Decimal(4),
+        isStockable: true,
+        lowStockThreshold: 2,
+      },
+    });
+    productBId = product.id;
+    await prisma.stockMovement.create({
+      data: {
+        businessId,
+        productId: product.id,
+        type: 'STOCK_IN',
+        quantity: 8,
+        createdById: memberB.id,
+      },
+    });
+    const sale = await prisma.sale.create({
+      data: {
+        businessId,
+        customerId: customer.id,
+        status: SaleStatus.COMPLETED,
+        paymentMethod: 'CASH',
+        paymentStatus: SalePaymentStatus.PAID,
+        subtotal: new Prisma.Decimal(4),
+        total: new Prisma.Decimal(4),
+        amountPaid: new Prisma.Decimal(4),
+        createdById: memberB.id,
+        receiptNumber: `RCPT-TEST-${suffix}`,
+        items: {
+          create: [{ productId: product.id, quantity: 1, unitPrice: 4, lineSubtotal: 4, costPrice: 2 }],
+        },
+      },
+    });
+    saleBId = sale.id;
+    saleItemBId = (await prisma.saleItem.findFirstOrThrow({ where: { saleId: sale.id } })).id;
+    const expenseCategory = await prisma.expenseCategory.create({
+      data: { businessId, name: 'B private expense category' },
+    });
+    expenseCategoryBId = expenseCategory.id;
+    const expense = await prisma.expense.create({
+      data: {
+        businessId,
+        categoryId: expenseCategory.id,
+        amount: new Prisma.Decimal(777),
+        description: 'B private expense',
+        expenseDate: new Date('2020-01-01T00:00:00Z'),
+        createdById: memberB.id,
+      },
+    });
+    expenseBId = expense.id;
+    const activityLog = await prisma.activityLog.create({
+      data: {
+        businessId,
+        userId: memberB.id,
+        action: 'private-test-event',
+        entityType: 'test',
+        entityId: sale.id,
+      },
+    });
+    activityLogBId = activityLog.id;
+
     resources.customers = [
       { id: customer.id, path: `/customers/${customer.id}`, patch: { name: 'Hijacked customer' } },
     ];
@@ -148,15 +237,46 @@ describe('Cross-business isolation (real Postgres)', () => {
     resources.invoices = [
       { id: invoice.id, path: `/invoices/${invoice.id}`, patch: { balance: 0 } },
     ];
+    resources.products = [
+      { id: product.id, path: `/catalog/${product.id}`, patch: { name: 'Hijacked product' }, removePath: `/catalog/${product.id}/archive` },
+    ];
+    resources.movements = [
+      { id: product.id, path: `/inventory/${product.id}/movements`, patch: {}, removePath: `/inventory/${product.id}/movements` },
+    ];
+    resources.expenses = [
+      { id: expense.id, path: `/expenses/${expense.id}`, patch: { categoryId: expenseCategory.id, amount: 1, expenseDate: '2020-01-01' } },
+    ];
+    resources.expenseCategories = [
+      { id: expenseCategory.id, path: `/expenses/categories/${expenseCategory.id}`, patch: { name: 'Hijacked category' } },
+    ];
+    resources.sales = [
+      { id: sale.id, path: `/sales/${sale.id}`, patch: {}, removePath: `/sales/${sale.id}` },
+    ];
+    resources.receipts = [
+      { id: sale.id, path: `/receipts/${sale.id}`, patch: {}, removePath: `/receipts/${sale.id}` },
+    ];
+    resources.catalogCategories = [{ id: catalogCategory.id, path: '/catalog/categories', patch: {} }];
+    resources.activityLogs = [{ id: activityLog.id, path: '/activity', patch: {}, removePath: '/activity' }];
+    resources.businesses = [{ id: businessId, path: '/businesses/profile', patch: {}, removePath: '/businesses/profile' }];
+    resources.businessModules = [{ id: businessId, path: '/businesses/modules', patch: { module: 'RETAIL', isEnabled: false }, removePath: '/businesses/modules' }];
   }, 30000);
 
   afterAll(async () => {
     if (prisma) {
       for (const businessId of businessIds) {
+        await prisma.activityLog.deleteMany({ where: { businessId } });
         await prisma.invoice.deleteMany({ where: { businessId } });
         await prisma.payment.deleteMany({ where: { businessId } });
         await prisma.booking.deleteMany({ where: { businessId } });
+        await prisma.stockMovement.deleteMany({ where: { businessId } });
+        await prisma.saleItem.deleteMany({ where: { businessId } });
+        await prisma.sale.deleteMany({ where: { businessId } });
+        await prisma.expense.deleteMany({ where: { businessId } });
+        await prisma.expenseCategory.deleteMany({ where: { businessId } });
         await prisma.customer.deleteMany({ where: { businessId } });
+        await prisma.product.deleteMany({ where: { businessId } });
+        await prisma.catalogCategory.deleteMany({ where: { businessId } });
+        await prisma.businessModule.deleteMany({ where: { businessId } });
         await prisma.room.deleteMany({ where: { businessId } });
         await prisma.property.deleteMany({ where: { businessId } });
         await prisma.business.deleteMany({ where: { id: businessId } });
@@ -218,5 +338,73 @@ describe('Cross-business isolation (real Postgres)', () => {
       expect.arrayContaining([expect.objectContaining({ name: 'Business B customer' })]),
     );
     expect(search.body).toEqual([]);
+  });
+
+  it('keeps catalog, inventory, sales, receipts, expenses and activity tenant scoped', async () => {
+    const catalog = await request(app.getHttpServer()).get('/catalog').set('Authorization', tokenA).expect(200);
+    const categories = await request(app.getHttpServer()).get('/catalog/categories').set('Authorization', tokenA).expect(200);
+    const stockable = await request(app.getHttpServer()).get('/inventory/products').set('Authorization', tokenA).expect(200);
+    const lowStock = await request(app.getHttpServer()).get('/inventory/low-stock').set('Authorization', tokenA).expect(200);
+    const sales = await request(app.getHttpServer()).get('/sales').set('Authorization', tokenA).expect(200);
+    const expenses = await request(app.getHttpServer()).get('/expenses').set('Authorization', tokenA).expect(200);
+    const expenseCategories = await request(app.getHttpServer()).get('/expenses/categories').set('Authorization', tokenA).expect(200);
+    const summary = await request(app.getHttpServer()).get('/expenses/summary').set('Authorization', tokenA).expect(200);
+    const activity = await request(app.getHttpServer()).get('/activity').set('Authorization', tokenA).expect(200);
+    const dashboard = await request(app.getHttpServer()).get('/dashboard/summary').set('Authorization', tokenA).expect(200);
+
+    expect(catalog.body).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: productBId })]));
+    expect(categories.body).not.toEqual(expect.arrayContaining([expect.objectContaining({ name: 'B private product category' })]));
+    expect(stockable.body).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: productBId })]));
+    expect(lowStock.body).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: productBId })]));
+    expect(sales.body).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: saleBId })]));
+    expect(expenses.body).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: expenseBId })]));
+    expect(expenseCategories.body).not.toEqual(expect.arrayContaining([expect.objectContaining({ name: 'B private expense category' })]));
+    expect(summary.body.total).toBe(0);
+    expect(activity.body).not.toEqual(expect.arrayContaining([expect.objectContaining({ action: 'private-test-event' })]));
+    expect(dashboard.body).toMatchObject({ revenue: 0, expenses: 0, outstandingPayments: 0, lowStock: 0 });
+    expect(dashboard.body.moduleCards).not.toEqual(expect.arrayContaining([expect.objectContaining({ module: 'RETAIL', value: 1 })]));
+
+    await request(app.getHttpServer()).get(`/catalog/${productBId}`).set('Authorization', tokenA).expect(404);
+    await request(app.getHttpServer()).patch(`/catalog/${productBId}`).set('Authorization', tokenA).send({ name: 'x' }).expect(404);
+    await request(app.getHttpServer()).post(`/catalog/${productBId}/archive`).set('Authorization', tokenA).expect(404);
+    await request(app.getHttpServer()).get(`/inventory/${productBId}/current`).set('Authorization', tokenA).expect(404);
+    await request(app.getHttpServer()).get(`/inventory/${productBId}/movements`).set('Authorization', tokenA).expect(404);
+    await request(app.getHttpServer()).get(`/sales/${saleBId}`).set('Authorization', tokenA).expect(404);
+    await request(app.getHttpServer()).patch(`/sales/${saleBId}`).set('Authorization', tokenA).send({ guestName: 'Hijacked' }).expect(404);
+    await request(app.getHttpServer()).delete(`/sales/${saleBId}`).set('Authorization', tokenA).expect(404);
+    await request(app.getHttpServer()).patch(`/sales/${saleBId}/items/${saleItemBId}`).set('Authorization', tokenA).send({ quantity: 99 }).expect(404);
+    await request(app.getHttpServer()).delete(`/sales/${saleBId}/items/${saleItemBId}`).set('Authorization', tokenA).expect(404);
+    await request(app.getHttpServer()).get(`/receipts/${saleBId}`).set('Authorization', tokenA).expect(404);
+    await request(app.getHttpServer()).patch(`/receipts/${saleBId}`).set('Authorization', tokenA).send({}).expect(404);
+    await request(app.getHttpServer()).delete(`/receipts/${saleBId}`).set('Authorization', tokenA).expect(404);
+    await request(app.getHttpServer()).patch(`/inventory/${productBId}/movements`).set('Authorization', tokenA).send({ quantity: 99 }).expect(404);
+    await request(app.getHttpServer()).delete(`/inventory/${productBId}/movements`).set('Authorization', tokenA).expect(404);
+    const catalogCategoryId = resources.catalogCategories[0].id;
+    await request(app.getHttpServer()).get(`/catalog/categories/${catalogCategoryId}`).set('Authorization', tokenA).expect(404);
+    await request(app.getHttpServer()).patch(`/catalog/categories/${catalogCategoryId}`).set('Authorization', tokenA).send({ name: 'Hijacked' }).expect(404);
+    await request(app.getHttpServer()).delete(`/catalog/categories/${catalogCategoryId}`).set('Authorization', tokenA).expect(404);
+    await request(app.getHttpServer()).patch(`/activity/${activityLogBId}`).set('Authorization', tokenA).send({ action: 'Hijacked' }).expect(404);
+    await request(app.getHttpServer()).delete(`/activity/${activityLogBId}`).set('Authorization', tokenA).expect(404);
+    await request(app.getHttpServer()).patch(`/expenses/${expenseBId}`).set('Authorization', tokenA).send({ categoryId: expenseCategoryBId, amount: 1, expenseDate: '2020-01-01' }).expect(404);
+    await request(app.getHttpServer()).delete(`/expenses/${expenseBId}`).set('Authorization', tokenA).expect(404);
+    await request(app.getHttpServer()).patch(`/expenses/categories/${expenseCategoryBId}`).set('Authorization', tokenA).send({ name: 'Hijacked' }).expect(404);
+    await request(app.getHttpServer()).delete(`/expenses/categories/${expenseCategoryBId}`).set('Authorization', tokenA).expect(404);
+
+    const profile = await request(app.getHttpServer()).get('/businesses/profile').set('Authorization', tokenA).expect(200);
+    expect(profile.body.name).not.toBe(businessBName);
+    const modules = await request(app.getHttpServer()).get('/businesses/modules').set('Authorization', tokenA).expect(200);
+    expect(modules.body).not.toEqual(expect.arrayContaining([expect.objectContaining({ businessId: resources.businesses[0].id })]));
+    await request(app.getHttpServer()).patch('/businesses/modules').set('Authorization', tokenA).send({ module: 'RETAIL', isEnabled: false }).expect(200);
+    expect((await prisma.businessModule.findUniqueOrThrow({ where: { businessId_module: { businessId: resources.businesses[0].id, module: BusinessModuleType.RETAIL } } })).isEnabled).toBe(true);
+    expect((await prisma.product.findUniqueOrThrow({ where: { id: productBId } })).name).toBe('B private product');
+    expect((await prisma.expense.findUniqueOrThrow({ where: { id: expenseBId } })).amount.toString()).toBe('777');
+    expect((await prisma.expenseCategory.findUniqueOrThrow({ where: { id: expenseCategoryBId } })).name).toBe('B private expense category');
+    expect((await prisma.catalogCategory.findUniqueOrThrow({ where: { id: resources.catalogCategories[0].id } })).name).toBe('B private catalog category');
+    expect((await prisma.sale.findUniqueOrThrow({ where: { id: saleBId } })).status).toBe('COMPLETED');
+    expect((await prisma.activityLog.findFirstOrThrow({ where: { businessId: resources.businesses[0].id } })).action).toBe('private-test-event');
+  });
+
+  it('returns 200 from /health when the real Postgres database is up', async () => {
+    await request(app.getHttpServer()).get('/health').expect(200).expect({ status: 'ok', database: 'ok' });
   });
 });

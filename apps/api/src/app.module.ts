@@ -14,24 +14,12 @@ import { SalesModule } from './sales/sales.module';
 import { ExpensesModule } from './expenses/expenses.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { ReceiptsModule } from './receipts/receipts.module';
+import { validateEnvironment } from './config/env.validation';
+import { ActivityLogsModule } from './activity-logs/activity-logs.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({
-      isGlobal: true,
-      validate: (env: Record<string, string | undefined>) => {
-        const missing = ['DATABASE_URL', 'JWT_ACCESS_SECRET', 'JWT_REFRESH_SECRET'].filter(
-          (key) => !env[key]?.trim(),
-        );
-        if (missing.length) {
-          throw new Error(`Missing required API environment variables: ${missing.join(', ')}`);
-        }
-        if (env.JWT_ACCESS_SECRET === env.JWT_REFRESH_SECRET) {
-          throw new Error('JWT_ACCESS_SECRET and JWT_REFRESH_SECRET must be different values');
-        }
-        return env;
-      },
-    }),
+    ConfigModule.forRoot({ isGlobal: true, validate: validateEnvironment }),
     PrismaModule,
     AuthModule,
     PropertiesModule,
@@ -45,6 +33,7 @@ import { ReceiptsModule } from './receipts/receipts.module';
     ExpensesModule,
     DashboardModule,
     ReceiptsModule,
+    ActivityLogsModule,
   ],
   controllers: [HealthController],
 })
