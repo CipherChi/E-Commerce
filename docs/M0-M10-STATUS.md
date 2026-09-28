@@ -23,7 +23,7 @@ This report is for `fix/batch-1-foundation` at the latest local commits. The bra
 - Fresh temp clone: `git clone --local --branch fix/batch-1-foundation C:\src\hotel-business-manager <temp-path>` then `corepack pnpm install --frozen-lockfile` — passed with pinned pnpm 9.15.0. Required build scripts ran; pnpm ignored only optional `unrs-resolver`.
 - `corepack pnpm build` — passed; API and Next.js production build completed.
 - `corepack pnpm lint` — passed; no ESLint warnings/errors.
-- `corepack pnpm --dir apps/api exec jest --coverage --ci --runInBand` — passed, 8 suites / 26 tests, 10.67% statements. Jest and CI floor is 10%, rounded down from measured coverage (previous floor 9%).
+- `corepack pnpm --filter api exec jest --coverage --ci --runInBand` — passed, 8 suites / 28 tests, 10.67% statements. Health controller and env validator have unit tests; ConfigModule initialization explicitly rejects missing `DATABASE_URL` and `JWT_ACCESS_SECRET` with clear messages. Jest and CI floor is 10%, rounded down from measured coverage (previous floor 9%).
 - `corepack pnpm --filter api test:e2e:auth` — passed, 1 suite / 5 tests.
 - With `TENANT_TEST_DATABASE_URL` and `DATABASE_URL` set to local Postgres: `corepack pnpm --filter api test:e2e` — passed, 2 suites / 14 tests; tenant suite uses real Postgres (not a Prisma mock).
 - Fresh database `hotel_manager_batch1_empty`: `prisma migrate deploy` applied all 9 migrations; `prisma migrate diff --from-url ... --to-schema-datamodel prisma/schema.prisma --exit-code` reported `No difference detected.`
