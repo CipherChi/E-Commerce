@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { apiRequest } from '@/lib/api';
+import { formatMoney } from '@/lib/money';
 
 type Property = { id: string; name: string; address: string; type: 'HOTEL' | 'SHORTLET' | 'APARTMENT' };
 type Room = {
@@ -60,7 +61,7 @@ export default function RoomsPage() {
           label: form.get('label'),
           type: form.get('type'),
           capacity: Number(form.get('capacity')),
-          basePrice: Number(form.get('basePrice')),
+          basePrice: String(form.get('basePrice')),
         }),
       });
       formElement.reset();
@@ -195,7 +196,7 @@ export default function RoomsPage() {
                     <p className="text-sm text-ink/60">{room.type}</p>
                   </div>
                   <p className="text-sm text-ink/70">
-                    {room.capacity} guests · ₦{Number(room.basePrice).toLocaleString()}
+                    {room.capacity} guests · {formatMoney(String(room.basePrice))}
                   </p>
                   <span
                     className={`rounded-full px-3 py-1 text-xs font-semibold ${statusStyles[room.status] ?? 'bg-paper text-ink/70'}`}

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '@/lib/api';
+import { formatMoney, multiplyMoney, subtractMoney, sumMoney } from '@/lib/money';
 type Item = { id: string; name: string; module: string; sellingPrice: string; isStockable: boolean };
 type Customer = { id: string; name: string; phone: string };
 type Sale = {
@@ -26,7 +27,7 @@ type Sale = {
   movements?: { id: string; quantity: number; product: { name: string } }[];
 };
 const field = 'mt-2 w-full rounded-xl border border-ink/15 bg-white px-4 py-3';
-const money = (n: string | number) => `₦${Number(n).toLocaleString()}`;
+const money = (n: string | number) => formatMoney(String(n));
 export default function SalesPage() {
   const [items, setItems] = useState<Item[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -70,16 +71,7 @@ export default function SalesPage() {
   useEffect(() => {
     void load();
   }, [load]);
-  const total = useMemo(
-    () =>
-      lines.reduce(
-        (sum, line) =>
-          sum +
-          Number(items.find((i) => i.id === line.productId)?.sellingPrice ?? 0) * line.quantity,
-        0,
-      ),
-    [lines, items],
-  );
+  const total = useMemo(() => sumMoney(lines.map(line => multiplyMoney(items.find(item => item.id === line.productId)?.sellingPrice ?? '0', line.quantity))), [lines, items]);
   function addLine() {
     const available = items.find((i) => !lines.some((l) => l.productId === i.id));
     if (available) setLines([...lines, { productId: available.id, quantity: 1 }]);
@@ -97,7 +89,7 @@ export default function SalesPage() {
           guestName: customerId ? undefined : guest,
           paymentMethod: method,
           paymentStatus,
-          amountPaid: paymentStatus === 'PARTIAL' ? Number(amountPaid) : undefined,
+          amountPaid: paymentStatus === 'PARTIAL' ? amountPaid : undefined,
           items: lines.map((l) => ({ productId: l.productId, quantity: l.quantity })),
         }),
       });
@@ -265,7 +257,7 @@ export default function SalesPage() {
               <input
                 required
                 min="0.01"
-                max={Math.max(0, total - 0.01)}
+                max={subtractMoney(total)}
                 step="0.01"
                 type="number"
                 value={amountPaid}

@@ -21,6 +21,7 @@ type Booking = {
     property: { id: string; name: string };
   };
 };
+const cash = (value: string) => { const [whole, fraction = '00'] = value.split('.'); return `₦${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}.${fraction.padEnd(2, '0')}`; };
 
 export default function BookingDetailPage() {
   const { bookingId } = useParams<{ bookingId: string }>();
@@ -28,6 +29,7 @@ export default function BookingDetailPage() {
   const [booking, setBooking] = useState<Booking | null>(null);
   const [error, setError] = useState('');
   const [working, setWorking] = useState(false);
+  const [invoiceId, setInvoiceId] = useState<string | null>(null);
   const load = useCallback(async () => {
     try {
       setBooking(await apiRequest<Booking>(`/bookings/${bookingId}`));
@@ -51,6 +53,15 @@ export default function BookingDetailPage() {
     } finally {
       setWorking(false);
     }
+  }
+
+  async function createInvoice() {
+    setWorking(true); setError('');
+    try {
+      const invoice = await apiRequest<{ id: string }>(`/bookings/${bookingId}/invoice`, { method: 'POST' });
+      setInvoiceId(invoice.id);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to create invoice'); }
+    finally { setWorking(false); }
   }
 
   return (
@@ -93,7 +104,7 @@ export default function BookingDetailPage() {
               <h2 className="font-semibold">Guest and total</h2>
               <p className="mt-3">{booking.customer.phone}</p>
               <p className="mt-2 text-lg font-semibold">
-                ₦{Number(booking.totalAmount).toLocaleString()}
+                {cash(booking.totalAmount)}
               </p>
             </article>
           </section>
@@ -103,6 +114,7 @@ export default function BookingDetailPage() {
               Room status: {booking.room.status.toLowerCase().replace('_', ' ')}
             </p>
             <div className="mt-5 flex flex-wrap gap-3">
+              {invoiceId ? <Link className="rounded-xl border border-ink/15 px-5 py-3 font-semibold" href={`/invoices/${invoiceId}`}>Open invoice and payments</Link> : <button className="rounded-xl border border-ink/15 px-5 py-3 font-semibold disabled:opacity-50" disabled={working} onClick={() => void createInvoice()}>Create / open invoice</button>}
               {booking.status === 'PENDING' && (
                 <>
                   <button

@@ -12,7 +12,7 @@ type Booking = {
   status: string;
   totalAmount: string;
   payments: { amount: string }[];
-  invoice?: { balance: string } | null;
+  invoice?: { balance: string; amountPaid: string } | null;
 };
 type Customer = {
   id: string;
@@ -22,9 +22,10 @@ type Customer = {
   idType?: string | null;
   idNumber?: string | null;
   notes?: string | null;
-  outstandingBalance: number;
+  outstandingBalance: string;
   bookings: Booking[];
 };
+const cash = (value: string) => { const [whole, fraction = '00'] = value.split('.'); return `₦${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}.${fraction.padEnd(2, '0')}`; };
 
 export default function CustomerProfilePage() {
   const params = useParams<{ customerId: string }>();
@@ -85,7 +86,7 @@ export default function CustomerProfilePage() {
       </Link>
       <h1 className="mt-5 text-4xl font-semibold">{customer.name}</h1>
       <p className="mt-2 text-ink/65">
-        Outstanding balance: ₦{customer.outstandingBalance.toLocaleString()}
+        Outstanding balance: {cash(customer.outstandingBalance)}
       </p>
       <section className="mt-8 grid gap-8 lg:grid-cols-[0.8fr_1.2fr]">
         <form className="h-fit rounded-3xl border border-ink/10 bg-white p-6" onSubmit={update}>
@@ -155,24 +156,7 @@ export default function CustomerProfilePage() {
                       {booking.status.replaceAll('_', ' ')}
                     </span>
                   </div>
-                  <p className="mt-2 text-sm text-ink/65">
-                    Booking total ₦{Number(booking.totalAmount).toLocaleString()} · paid ₦
-                    {booking.payments
-                      .reduce((sum, payment) => sum + Number(payment.amount), 0)
-                      .toLocaleString()}{' '}
-                    · due ₦
-                    {Number(
-                      booking.invoice?.balance ??
-                        Math.max(
-                          0,
-                          Number(booking.totalAmount) -
-                            booking.payments.reduce(
-                              (sum, payment) => sum + Number(payment.amount),
-                              0,
-                            ),
-                        ),
-                    ).toLocaleString()}
-                  </p>
+                  <p className="mt-2 text-sm text-ink/65">{booking.invoice ? <>Invoice total {cash(booking.totalAmount)} · paid {cash(booking.invoice.amountPaid)} · due {cash(booking.invoice.balance)}</> : <>Booking total {cash(booking.totalAmount)} · not invoiced</>}</p>
                 </article>
               ))}
             </div>

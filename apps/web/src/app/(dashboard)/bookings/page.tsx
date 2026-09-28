@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiRequest } from '@/lib/api';
+import { formatMoney } from '@/lib/money';
 
 type Property = { id: string; name: string };
 type Room = { id: string; label: string; type: string; basePrice: string; status: string };
@@ -183,7 +184,7 @@ export default function BookingsPage() {
               <option value="">Select room</option>
               {rooms.map((room) => (
                 <option key={room.id} value={room.id}>
-                  {room.label} · {room.type} · ₦{Number(room.basePrice).toLocaleString()}/night ·{' '}
+                  {room.label} · {room.type} · {formatMoney(room.basePrice)}/night ·{' '}
                   {room.status.toLowerCase()}
                 </option>
               ))}
@@ -272,7 +273,7 @@ export default function BookingsPage() {
                     </span>
                   </div>
                   <p className="mt-3 text-sm text-ink/70">
-                    Stay total ₦{Number(booking.totalAmount).toLocaleString()}
+                    Stay total {formatMoney(booking.totalAmount)}
                   </p>
                 </Link>
               ))}

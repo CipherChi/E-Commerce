@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { apiRequest } from '@/lib/api';
+import { formatMoney } from '@/lib/money';
 
 type Item = {
   id: string;
@@ -60,8 +61,8 @@ export default function ProductsPage() {
       name: form.get('name'),
       module: kind,
       category: form.get('category') || undefined,
-      costPrice: Number(form.get('costPrice')),
-      sellingPrice: Number(form.get('sellingPrice')),
+      costPrice: String(form.get('costPrice')),
+      sellingPrice: String(form.get('sellingPrice')),
       isStockable: stockable,
       lowStockThreshold:
         stockable && form.get('lowStockThreshold') !== ''
@@ -295,7 +296,7 @@ export default function ProductsPage() {
                 </div>
                 <span className="text-sm text-ink/65">{item.module}</span>
                 <span className="text-sm text-ink/65">{item.category ?? '—'}</span>
-                <span className="text-sm">₦{Number(item.sellingPrice).toLocaleString()}</span>
+                <span className="text-sm">{formatMoney(item.sellingPrice)}</span>
                 <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm">
                   <span className="text-ink/55">
                     {item.isStockable ? `${item.currentQuantity ?? 0} on hand` : 'Non-stockable'}
