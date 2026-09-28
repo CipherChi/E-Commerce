@@ -132,4 +132,15 @@ describe('Authentication endpoints', () => {
       .set('Authorization', `Bearer ${token}`)
       .expect(401);
   });
+
+  it('returns 429 after repeated invalid login attempts', async () => {
+    const statuses: number[] = [];
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const response = await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ email: 'rate-limit@example.com', password: 'invalid-password-123' });
+      statuses.push(response.status);
+    }
+    expect(statuses).toContain(429);
+  }, 30000);
 });
