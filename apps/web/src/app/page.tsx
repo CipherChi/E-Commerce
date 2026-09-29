@@ -1,9 +1,3 @@
-const setupSteps = [
-  'Add your properties and rooms',
-  'Register customers and create bookings',
-  'Record payments and review invoices',
-];
-
 export default function HomePage() {
   return (
     <main data-surface="public" className="hero relative flex min-h-screen w-full flex-col overflow-hidden px-6 py-12 sm:px-10 sm:py-20">
@@ -35,44 +29,16 @@ export default function HomePage() {
             >
               Sign in
             </a>
-            <a
-              className="pill pill--outline rounded-full border border-white/40 bg-black/10 px-6 py-3 text-sm font-semibold text-white"
-              href="/properties"
-            >
-              Manage properties
-            </a>
-            <a
-              className="pill pill--outline rounded-full border border-white/40 bg-black/10 px-6 py-3 text-sm font-semibold text-white"
-              href="/customers"
-            >
-              Customers
-            </a>
-            <a className="pill pill--outline rounded-full border border-white/40 bg-black/10 px-6 py-3 text-sm font-semibold text-white" href="/products">Products &amp; services</a>
-            <a className="pill pill--outline rounded-full border border-white/40 bg-black/10 px-6 py-3 text-sm font-semibold text-white" href="/inventory">Inventory</a>
-            <a className="pill pill--outline rounded-full border border-white/40 bg-black/10 px-6 py-3 text-sm font-semibold text-white" href="/sales">Sales</a>
-            <a className="pill pill--outline rounded-full border border-white/40 bg-black/10 px-6 py-3 text-sm font-semibold text-white" href="/dashboard">Dashboard</a>
-            <a className="pill pill--outline rounded-full border border-white/40 bg-black/10 px-6 py-3 text-sm font-semibold text-white" href="/expenses">Expenses</a>
-            <span className="rounded-full border border-white/25 px-6 py-3 text-sm font-medium text-white/75">
-              Local setup preview
-            </span>
+            <a className="pill pill--outline rounded-full border border-white/40 bg-black/10 px-6 py-3 text-sm font-semibold text-white" href="/register">Create business</a>
           </div>
         </div>
 
         <aside className="rounded-3xl border border-white/25 bg-[#17231e]/80 p-7 text-white shadow-sm backdrop-blur-md sm:p-9">
           <p className="text-sm font-semibold text-accent">A clear daily rhythm</p>
           <h2 className="mt-3 text-2xl font-semibold">From room to revenue</h2>
-          <ol className="mt-8 space-y-5">
-            {setupSteps.map((step, index) => (
-              <li className="flex gap-4" key={step}>
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-paper text-sm font-semibold text-accent">
-                  {index + 1}
-                </span>
-                <span className="pt-1 text-sm leading-6 text-white/80">{step}</span>
-              </li>
-            ))}
-          </ol>
+          <p className="mt-5 text-sm leading-6 text-white/80">Keep rooms, reservations, sales, inventory and customers organized in one place.</p>
           <div className="mt-8 border-t border-ink/10 pt-6 text-xs leading-5 text-ink/55">
-            The reservation-to-cash workflow is being delivered milestone by milestone.
+            Sign in to continue to your business workspace.
           </div>
         </aside>
       </section>

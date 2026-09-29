@@ -24,7 +24,7 @@ export default function BusinessSetupPage() {
           logo: form.get('logo') || undefined,
         }),
       });
-      window.location.assign('/products');
+      window.location.assign('/dashboard');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to create your business');
     } finally {

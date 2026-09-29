@@ -20,8 +20,9 @@ export class SalesController {
     @Query('paymentMethod') paymentMethod?: string,
     @Query('status') status?: string,
     @Query('paymentStatus') paymentStatus?: string,
+    @Query('recordedById') recordedById?: string,
   ) {
-    return this.sales.list(req.user.businessId, { from, to, customerId, paymentMethod, status, paymentStatus });
+    return this.sales.list(req.user.businessId, { from, to, customerId, paymentMethod, status, paymentStatus, recordedById });
   }
   @Get(':id') get(@Req() req: AuthReq, @Param('id') id: string) {
     return this.sales.get(req.user.businessId, id);

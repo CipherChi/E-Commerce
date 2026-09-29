@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import * as argon2 from 'argon2';
 import { BusinessModuleType, BusinessType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBusinessDto } from './dto/create-business.dto';
@@ -12,6 +13,22 @@ const primaryModule: Record<BusinessType, BusinessModuleType> = {
 @Injectable()
 export class BusinessesService {
   constructor(private prisma: PrismaService) {}
+
+  async staff(businessId: string) {
+    return this.prisma.businessMember.findMany({ where: { businessId, role: 'STAFF' }, include: { user: { select: { id: true, name: true, email: true, isActive: true, createdAt: true } } }, orderBy: { createdAt: 'desc' } });
+  }
+
+  async createStaff(businessId: string, dto: { name: string; email: string; password: string }) {
+    const email = dto.email.toLowerCase().trim();
+    if (await this.prisma.user.findUnique({ where: { email } })) throw new ConflictException('Email already registered');
+    return this.prisma.user.create({ data: { name: dto.name.trim(), email, passwordHash: await argon2.hash(dto.password), role: 'STAFF', memberships: { create: { businessId, role: 'STAFF' } } }, select: { id: true, name: true, email: true, isActive: true, createdAt: true } });
+  }
+
+  async setStaffActive(businessId: string, userId: string, isActive: boolean) {
+    const membership = await this.prisma.businessMember.findFirst({ where: { businessId, userId, role: 'STAFF' } });
+    if (!membership) throw new NotFoundException('Staff member not found');
+    return this.prisma.user.update({ where: { id: userId }, data: { isActive, tokenVersion: { increment: 1 } }, select: { id: true, name: true, email: true, isActive: true } });
+  }
 
   create(userId: string, dto: CreateBusinessDto) {
     const { primaryType, ...details } = dto;

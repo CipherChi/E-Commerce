@@ -14,6 +14,8 @@ import { BookingStatus } from '@prisma/client';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Request } from 'express';
 import { BusinessContextGuard } from '../auth/business-context.guard';
+import { Roles } from '../auth/roles.decorator';
+import { RolesGuard } from '../auth/roles.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { ListBookingsDto } from './dto/list-bookings.dto';
@@ -54,37 +56,37 @@ export class BookingsController {
     return this.bookings.get(req.user.businessId, id);
   }
 
-  @Patch(':id')
+  @Patch(':id') @UseGuards(RolesGuard) @Roles('ADMIN')
   update(@Req() req: TenantRequest, @Param('id') id: string, @Body() input: UpdateBookingDto) {
     return this.bookings.update(req.user.businessId, id, input);
   }
 
-  @Delete(':id')
+  @Delete(':id') @UseGuards(RolesGuard) @Roles('ADMIN')
   remove(@Req() req: TenantRequest, @Param('id') id: string) {
     return this.bookings.remove(req.user.businessId, id);
   }
 
-  @Post(':id/check-in')
+  @Post(':id/check-in') @UseGuards(RolesGuard) @Roles('ADMIN')
   checkIn(@Req() req: TenantRequest, @Param('id') id: string) {
     return this.bookings.transition(req.user.businessId, id, BookingStatus.CHECKED_IN);
   }
 
-  @Post(':id/confirm')
+  @Post(':id/confirm') @UseGuards(RolesGuard) @Roles('ADMIN')
   confirm(@Req() req: TenantRequest, @Param('id') id: string) {
     return this.bookings.transition(req.user.businessId, id, BookingStatus.CONFIRMED);
   }
 
-  @Post(':id/check-out')
+  @Post(':id/check-out') @UseGuards(RolesGuard) @Roles('ADMIN')
   checkOut(@Req() req: TenantRequest, @Param('id') id: string) {
     return this.bookings.transition(req.user.businessId, id, BookingStatus.CHECKED_OUT);
   }
 
-  @Post(':id/cancel')
+  @Post(':id/cancel') @UseGuards(RolesGuard) @Roles('ADMIN')
   cancel(@Req() req: TenantRequest, @Param('id') id: string) {
     return this.bookings.transition(req.user.businessId, id, BookingStatus.CANCELLED);
   }
 
-  @Post(':id/no-show')
+  @Post(':id/no-show') @UseGuards(RolesGuard) @Roles('ADMIN')
   noShow(@Req() req: TenantRequest, @Param('id') id: string) {
     return this.bookings.transition(req.user.businessId, id, BookingStatus.NO_SHOW);
   }

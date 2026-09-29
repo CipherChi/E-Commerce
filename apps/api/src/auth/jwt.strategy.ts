@@ -22,9 +22,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         orderBy: { createdAt: 'desc' },
         select: { businessId: true, role: true },
       }),
-      this.prisma.user.findUnique({ where: { id: payload.sub }, select: { tokenVersion: true } }),
+      this.prisma.user.findUnique({ where: { id: payload.sub }, select: { tokenVersion: true, isActive: true } }),
     ]);
-    if (!user || (payload.tokenVersion ?? 0) !== (user.tokenVersion ?? 0)) {
+    if (!user || !user.isActive || (payload.tokenVersion ?? 0) !== (user.tokenVersion ?? 0)) {
       throw new UnauthorizedException('Session has ended');
     }
     return {

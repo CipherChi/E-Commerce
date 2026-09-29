@@ -4,13 +4,15 @@ import Link from 'next/link';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '@/lib/api';
 import { formatMoney, multiplyMoney, subtractMoney, sumMoney } from '@/lib/money';
-type Item = { id: string; name: string; module: string; sellingPrice: string; isStockable: boolean };
+type Item = { id: string; name: string; module: string; sellingPrice: string; isStockable: boolean; currentQuantity?: number | null };
 type Customer = { id: string; name: string; phone: string };
+type StaffMember = { id: string; name: string };
 type Sale = {
   id: string;
   guestName?: string | null;
   customer?: Customer | null;
   createdAt: string;
+  createdBy?: { id: string; name: string };
   paymentMethod: string;
   paymentStatus: string;
   subtotal: string;
@@ -47,12 +49,15 @@ export default function SalesPage() {
   const [search, setSearch] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
+  const [staff, setStaff] = useState<StaffMember[]>([]);
+  const [recordedBy, setRecordedBy] = useState('');
   const load = useCallback(async () => {
     try {
       const params = new URLSearchParams();
       if (filter) params.set('paymentMethod', filter);
       if (customerFilter) params.set('customerId', customerFilter);
       if (statusFilter) params.set('status', statusFilter);
+      if (recordedBy) params.set('recordedById', recordedBy);
       if (from) params.set('from', new Date(from).toISOString());
       if (to) params.set('to', new Date(`${to}T23:59:59`).toISOString());
       const [catalog, guests, history] = await Promise.all([
@@ -67,10 +72,11 @@ export default function SalesPage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unable to load sales');
     }
-  }, [filter, customerFilter, statusFilter, from, to]);
+  }, [filter, customerFilter, statusFilter, from, to, recordedBy]);
   useEffect(() => {
     void load();
   }, [load]);
+  useEffect(() => { void apiRequest<{role:string}>('/auth/me').then(me => { if(me.role==='ADMIN'||me.role==='OWNER') return apiRequest<Array<{user:StaffMember}>>('/businesses/staff').then(rows=>setStaff(rows.map(row=>row.user))); }).catch(()=>{}); }, []);
   const total = useMemo(() => sumMoney(lines.map(line => multiplyMoney(items.find(item => item.id === line.productId)?.sellingPrice ?? '0', line.quantity))), [lines, items]);
   function addLine() {
     const available = items.find((i) => !lines.some((l) => l.productId === i.id));
@@ -189,7 +195,7 @@ export default function SalesPage() {
                   >
                     {items.map((i) => (
                       <option key={i.id} value={i.id}>
-                        {i.name} · {money(i.sellingPrice)}
+                        {i.name} · {money(i.sellingPrice)}{i.isStockable ? ` · ${i.currentQuantity ?? 0} in stock` : ''}
                       </option>
                     ))}
                   </select>
@@ -329,6 +335,7 @@ export default function SalesPage() {
                   <option value="CANCELLED">Cancelled</option>
                 </select>
               </label>
+              {staff.length>0 && <label className="text-xs font-medium">Recorded by<select value={recordedBy} onChange={e=>setRecordedBy(e.target.value)} className={field}><option value="">All staff</option>{staff.map(member=><option key={member.id} value={member.id}>{member.name}</option>)}</select></label>}
               <label className="text-xs font-medium">
                 From
                 <input
@@ -376,7 +383,7 @@ export default function SalesPage() {
                         </span>
                       </p>
                       <p className="mt-1 text-sm text-ink/55">
-                        {s.paymentMethod} · {s.paymentStatus} · {s._count?.items ?? '—'} lines
+                        {s.paymentMethod} · {s.paymentStatus} · {s._count?.items ?? '—'} lines · Recorded by {s.createdBy?.name ?? '—'}
                       </p>
                     </div>
                     <p className="font-semibold">{money(s.total)}</p>
@@ -421,6 +428,7 @@ export default function SalesPage() {
                 </span>
                 <strong>Total {money(selected.total)}</strong>
               </div>
+              <p className="mt-3 text-sm text-ink/60">Recorded by {selected.createdBy?.name ?? '—'}</p>
               <Link className="mt-4 inline-flex rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white" href={`/receipts/${selected.id}`}>View receipt</Link>
               {!!selected.movements?.length && (
                 <div className="mt-4 rounded-xl bg-paper p-4">

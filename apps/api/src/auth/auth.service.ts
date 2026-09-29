@@ -27,7 +27,7 @@ export class AuthService {
 
   async login(dto: LoginDto) {
     const user = await this.prisma.user.findUnique({ where: { email: dto.email.toLowerCase() } });
-    if (!user || !(await argon2.verify(user.passwordHash, dto.password)))
+    if (!user || !user.isActive || !(await argon2.verify(user.passwordHash, dto.password)))
       throw new UnauthorizedException('Invalid email or password');
     return this.issueTokens(user);
   }
@@ -53,6 +53,7 @@ export class AuthService {
       where: { id: userId },
       select: {
         id: true,
+        isActive: true,
         email: true,
         name: true,
         role: true,
@@ -64,7 +65,7 @@ export class AuthService {
         },
       },
     });
-    if (!user) throw new UnauthorizedException();
+    if (!user || !user.isActive) throw new UnauthorizedException();
     const { memberships = [], ...profile } = user;
     return {
       ...profile,

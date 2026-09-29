@@ -30,7 +30,8 @@ export default function LoginPage() {
         headers: { Authorization: `Bearer ${result.accessToken}` },
       });
       const profile = profileResponse.ok ? await profileResponse.json() : null;
-      window.location.assign(profile?.businessId ? '/properties' : '/business');
+      const requested = new URLSearchParams(window.location.search).get('returnTo');
+      window.location.assign(profile?.businessId ? (requested?.startsWith('/') ? requested : '/dashboard') : '/business');
     } catch (cause) {
       setError(
         cause instanceof Error

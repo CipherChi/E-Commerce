@@ -132,11 +132,13 @@ export class SalesService {
       paymentMethod?: string;
       status?: string;
       paymentStatus?: string;
+      recordedById?: string;
     },
   ) {
     return this.prisma.sale.findMany({
       where: {
         businessId,
+        ...(query.recordedById ? { createdById: query.recordedById } : {}),
         ...(query.customerId ? { customerId: query.customerId } : {}),
         ...(query.paymentMethod ? { paymentMethod: query.paymentMethod as never } : {}),
         ...(query.status ? { status: query.status as never } : {}),
@@ -152,6 +154,7 @@ export class SalesService {
       },
       include: {
         customer: { select: { id: true, name: true, phone: true } },
+        createdBy: { select: { id: true, name: true } },
         _count: { select: { items: true } },
       },
       orderBy: { createdAt: 'desc' },

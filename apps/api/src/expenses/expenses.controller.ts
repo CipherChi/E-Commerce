@@ -1,8 +1,8 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'; import { Request } from 'express';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard'; import { BusinessContextGuard } from '../auth/business-context.guard'; import { ExpensesService } from './expenses.service'; import { CategoryDto, ExpenseDto } from './dto/expense.dto';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard'; import { BusinessContextGuard } from '../auth/business-context.guard'; import { Roles } from '../auth/roles.decorator'; import { RolesGuard } from '../auth/roles.guard'; import { ExpensesService } from './expenses.service'; import { CategoryDto, ExpenseDto } from './dto/expense.dto';
 type ReqUser=Request&{user:{businessId:string;sub:string}};
-@ApiTags('expenses') @ApiBearerAuth() @UseGuards(JwtAuthGuard,BusinessContextGuard) @Controller('expenses')
+@ApiTags('expenses') @ApiBearerAuth() @UseGuards(JwtAuthGuard,BusinessContextGuard,RolesGuard) @Roles('ADMIN') @Controller('expenses')
 export class ExpensesController { constructor(private s:ExpensesService){}
  @Get('categories') categories(@Req()r:ReqUser){return this.s.categories(r.user.businessId)}
  @Post('categories') createCat(@Req()r:ReqUser,@Body()d:CategoryDto){return this.s.createCategory(r.user.businessId,d)}
