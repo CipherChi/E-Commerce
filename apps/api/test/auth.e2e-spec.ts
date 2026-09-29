@@ -18,6 +18,7 @@ describe('Authentication endpoints', () => {
         const user = {
           id: `user-${users.length + 1}`,
           role: 'STAFF',
+          isActive: true,
           propertyId: null,
           tokenVersion: 0,
           refreshTokenHash: null,
