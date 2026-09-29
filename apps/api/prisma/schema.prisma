@@ -16,6 +16,7 @@ enum Role {
 enum PropertyType {
   HOTEL
   SHORTLET
+  APARTMENT
 }
 
 enum RoomStatus {
@@ -31,6 +32,7 @@ enum BookingStatus {
   CHECKED_IN
   CHECKED_OUT
   CANCELLED
+  NO_SHOW
 }
 
 enum BookingSource {
@@ -48,7 +50,43 @@ enum PaymentMethod {
 enum InvoiceStatus {
   DRAFT
   ISSUED
+  UNPAID
+  PARTIAL
   PAID
+  VOID
+}
+
+enum BusinessType {
+  HOTEL
+  APARTMENT
+  RESTAURANT
+  GYM
+  SUPERMARKET
+}
+
+enum BusinessModuleType {
+  LODGING
+  FOOD
+  BEVERAGE
+  GYM
+}
+
+enum StockMovementType {
+  STOCK_IN
+  STOCK_OUT
+  ADJUSTMENT
+}
+
+enum SaleStatus {
+  DRAFT
+  COMPLETED
+  CANCELLED
+}
+
+enum SalePaymentStatus {
+  PAID
+  PARTIAL
+  UNPAID
 }
 
 model User {
@@ -59,28 +97,53 @@ model User {
   tokenVersion     Int              @default(0)
   name             String
   role             Role             @default(STAFF)
+  isActive         Boolean          @default(true)
   propertyId       String?
   property         Property?        @relation("UserProperty", fields: [propertyId], references: [id])
   ownedProperties  Property[]       @relation("PropertyOwner")
   payments         Payment[]        @relation("RecordedBy")
+  stockMovements   StockMovement[]
+  sales            Sale[]
+  expenses         Expense[]
   memberships      BusinessMember[]
   createdAt        DateTime         @default(now())
 }
 
 model Business {
-  id         String           @id @default(cuid())
-  name       String
-  phone      String?
-  address    String?
-  logo       String?
-  createdAt  DateTime         @default(now())
-  members    BusinessMember[]
-  properties Property[]
-  rooms      Room[]
-  customers  Customer[]
-  bookings   Booking[]
-  payments   Payment[]
-  invoices   Invoice[]
+  id                String            @id @default(cuid())
+  name              String
+  primaryType       BusinessType      @default(HOTEL)
+  phone             String?
+  address           String?
+  logo              String?
+  createdAt         DateTime          @default(now())
+  members           BusinessMember[]
+  properties        Property[]
+  rooms             Room[]
+  customers         Customer[]
+  bookings          Booking[]
+  payments          Payment[]
+  invoices          Invoice[]
+  categories        CatalogCategory[]
+  products          Product[]
+  stockMovements    StockMovement[]
+  sales             Sale[]
+  expenseCategories ExpenseCategory[]
+  expenses          Expense[]
+  modules           BusinessModule[]
+  activityLogs      ActivityLog[]
+}
+
+model BusinessModule {
+  id         String             @id @default(cuid())
+  businessId String
+  module     BusinessModuleType
+  isEnabled  Boolean            @default(true)
+  enabledAt  DateTime           @default(now())
+  business   Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, module])
+  @@index([businessId, isEnabled])
 }
 
 model BusinessMember {
@@ -110,6 +173,7 @@ model Property {
   createdAt  DateTime     @default(now())
 
   @@unique([id, businessId])
+  @@index([businessId])
 }
 
 model Room {
@@ -127,6 +191,7 @@ model Room {
 
   @@unique([propertyId, label])
   @@unique([id, businessId])
+  @@index([businessId])
 }
 
 model Customer {
@@ -139,12 +204,138 @@ model Customer {
   idNumber   String?
   notes      String?
   bookings   Booking[]
+  sales      Sale[]
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
   archivedAt DateTime?
   business   Business  @relation(fields: [businessId], references: [id])
 
   @@unique([id, businessId])
+  @@index([businessId, name])
+}
+
+model CatalogCategory {
+  id         String   @id @default(cuid())
+  businessId String
+  name       String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, name])
+  @@unique([id, businessId])
+}
+
+model Product {
+  id                String             @id @default(cuid())
+  businessId        String
+  category          String?
+  name              String
+  module            BusinessModuleType
+  costPrice         Decimal            @db.Decimal(12, 2)
+  sellingPrice      Decimal            @db.Decimal(12, 2)
+  normalRate        Decimal            @default(0) @db.Decimal(12, 2)
+  partyRate         Decimal            @default(0) @db.Decimal(12, 2)
+  monthlyPrice      Decimal            @default(0) @db.Decimal(12, 2)
+  isStockable       Boolean            @default(false)
+  lowStockThreshold Int?
+  isArchived        Boolean            @default(false)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  business          Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  movements         StockMovement[]
+  saleItems         SaleItem[]
+
+  @@unique([id, businessId])
+  @@index([businessId, module, isArchived])
+}
+
+// Quantity is a signed delta: IN positive, OUT negative, adjustments signed.
+model StockMovement {
+  id          String            @id @default(cuid())
+  businessId  String
+  productId   String
+  saleId      String?
+  type        StockMovementType
+  quantity    Int
+  reason      String?
+  createdById String
+  createdAt   DateTime          @default(now())
+  business    Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  product     Product           @relation(fields: [productId, businessId], references: [id, businessId])
+  sale        Sale?             @relation(fields: [saleId, businessId], references: [id, businessId])
+  createdBy   User              @relation(fields: [createdById], references: [id])
+
+  @@index([businessId, productId, createdAt])
+  @@index([saleId])
+}
+
+model Sale {
+  id            String            @id @default(cuid())
+  businessId    String
+  customerId    String?
+  guestName     String?
+  status        SaleStatus        @default(COMPLETED)
+  paymentMethod PaymentMethod
+  paymentStatus SalePaymentStatus
+  subtotal      Decimal           @db.Decimal(12, 2)
+  total         Decimal           @db.Decimal(12, 2)
+  amountPaid    Decimal           @db.Decimal(12, 2)
+  createdById   String
+  createdAt     DateTime          @default(now())
+  business      Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customer      Customer?         @relation(fields: [customerId, businessId], references: [id, businessId])
+  createdBy     User              @relation(fields: [createdById], references: [id])
+  items         SaleItem[]
+  movements     StockMovement[]
+  receiptNumber String?           @unique
+
+  @@unique([id, businessId])
+  @@index([businessId, createdAt, status])
+  @@index([businessId, receiptNumber])
+}
+
+model SaleItem {
+  id           String  @id @default(cuid())
+  businessId   String
+  saleId       String
+  productId    String
+  quantity     Int
+  unitPrice    Decimal @db.Decimal(12, 2)
+  lineSubtotal Decimal @db.Decimal(12, 2)
+  costPrice    Decimal @default(0) @db.Decimal(12, 2)
+  sale         Sale    @relation(fields: [saleId, businessId], references: [id, businessId], onDelete: Cascade)
+  product      Product @relation(fields: [productId, businessId], references: [id, businessId])
+
+  @@index([saleId])
+}
+
+model ExpenseCategory {
+  id         String    @id @default(cuid())
+  businessId String
+  name       String
+  isArchived Boolean   @default(false)
+  business   Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  expenses   Expense[]
+
+  @@unique([id, businessId])
+  @@unique([businessId, name])
+}
+
+model Expense {
+  id          String          @id @default(cuid())
+  businessId  String
+  categoryId  String
+  amount      Decimal         @db.Decimal(12, 2)
+  description String?
+  expenseDate DateTime        @db.Date
+  isArchived  Boolean         @default(false)
+  createdById String
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  business    Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  category    ExpenseCategory @relation(fields: [categoryId, businessId], references: [id, businessId])
+  createdBy   User            @relation(fields: [createdById], references: [id])
+
+  @@index([businessId, expenseDate, isArchived])
 }
 
 model Booking {
@@ -152,8 +343,8 @@ model Booking {
   businessId  String
   roomId      String
   customerId  String
-  checkIn     DateTime
-  checkOut    DateTime
+  checkIn     DateTime      @db.Date
+  checkOut    DateTime      @db.Date
   status      BookingStatus @default(PENDING)
   totalAmount Decimal       @db.Decimal(12, 2)
   source      BookingSource @default(WALK_IN)
@@ -166,6 +357,7 @@ model Booking {
 
   @@unique([id, businessId])
   @@index([roomId, checkIn, checkOut])
+  @@index([businessId])
 }
 
 model Payment {
@@ -180,6 +372,8 @@ model Payment {
   booking      Booking       @relation(fields: [bookingId, businessId], references: [id, businessId])
   recordedBy   User          @relation("RecordedBy", fields: [recordedById], references: [id])
   business     Business      @relation(fields: [businessId], references: [id])
+
+  @@index([businessId])
 }
 
 model Invoice {
@@ -197,14 +391,19 @@ model Invoice {
   business      Business      @relation(fields: [businessId], references: [id])
 
   @@unique([bookingId, businessId])
+  @@index([businessId])
 }
 
 model ActivityLog {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   userId     String
+  businessId String?
   action     String
   entityType String
   entityId   String
   meta       Json?
-  createdAt  DateTime @default(now())
+  createdAt  DateTime  @default(now())
+  business   Business? @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, createdAt])
 }

@@ -31,6 +31,7 @@ describe('AuthService', () => {
       email: user.email,
       name: user.name,
       password: 'password123',
+      primaryType: 'HOTEL' as never,
     });
     expect(prisma.user.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -49,7 +50,7 @@ describe('AuthService', () => {
   it('rejects duplicate registration', async () => {
     prisma.user.findUnique.mockResolvedValue(user);
     await expect(
-      service.register({ email: user.email, name: user.name, password: 'password123' }),
+      service.register({ email: user.email, name: user.name, password: 'password123', primaryType: 'HOTEL' as never }),
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
@@ -71,5 +72,27 @@ describe('AuthService', () => {
     expect(prisma.user.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: { refreshTokenHash: 'new-hash' } }),
     );
+  });
+
+  it('stores only a hash of the issued refresh token', async () => {
+    prisma.user.findUnique.mockResolvedValue(null);
+    prisma.user.create.mockResolvedValue(user);
+    prisma.user.update.mockResolvedValue(user);
+    jest.spyOn(argon2, 'hash').mockResolvedValue('argon2-refresh-hash');
+    jwt.signAsync.mockResolvedValueOnce('access-token').mockResolvedValueOnce('plain-refresh-token');
+
+    const session = await service.register({
+      email: user.email,
+      name: user.name,
+      password: 'a-strong-password',
+      primaryType: 'HOTEL' as never,
+    });
+
+    expect(session.refreshToken).toBe('plain-refresh-token');
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: user.id },
+      data: { refreshTokenHash: 'argon2-refresh-hash' },
+    });
+    expect(prisma.user.update.mock.calls[0][0].data.refreshTokenHash).not.toBe(session.refreshToken);
   });
 });

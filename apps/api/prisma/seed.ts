@@ -1,4 +1,4 @@
-import { PrismaClient, Role } from '@prisma/client';
+import { BusinessModuleType, PrismaClient, Role } from '@prisma/client';
 import * as argon2 from 'argon2';
 
 const prisma = new PrismaClient();
@@ -27,6 +27,100 @@ async function main() {
     update: {},
     create: { businessId: 'default-business-migration', userId: user.id, role: 'OWNER' },
   });
+  const businessId = 'default-business-migration';
+  for (const name of ['Electricity', 'Staff', 'Maintenance', 'Other']) {
+    await prisma.expenseCategory.upsert({
+      where: { businessId_name: { businessId, name } },
+      update: {},
+      create: { businessId, name },
+    });
+  }
+  await prisma.businessModule.upsert({ where: { businessId_module: { businessId: 'default-business-migration', module: BusinessModuleType.LODGING } }, update: {}, create: { businessId: 'default-business-migration', module: BusinessModuleType.LODGING, isEnabled: true } });
+  await prisma.businessModule.upsert({ where: { businessId_module: { businessId: 'default-business-migration', module: BusinessModuleType.FOOD } }, update: {}, create: { businessId: 'default-business-migration', module: BusinessModuleType.FOOD, isEnabled: true } });
+  await prisma.businessModule.upsert({ where: { businessId_module: { businessId: 'default-business-migration', module: BusinessModuleType.BEVERAGE } }, update: {}, create: { businessId: 'default-business-migration', module: BusinessModuleType.BEVERAGE, isEnabled: true } });
+  const roomCategory = await prisma.catalogCategory.upsert({
+    where: { businessId_name: { businessId, name: 'Rooms' } },
+    update: {},
+    create: { businessId, name: 'Rooms' },
+  });
+  const serviceCategory = await prisma.catalogCategory.upsert({
+    where: { businessId_name: { businessId, name: 'Services' } },
+    update: {},
+    create: { businessId, name: 'Services' },
+  });
+  const beverageCategory = await prisma.catalogCategory.upsert({
+    where: { businessId_name: { businessId, name: 'Beverages' } },
+    update: {},
+    create: { businessId, name: 'Beverages' },
+  });
+  const catalogSeed = [
+    {
+      name: 'Deluxe Room',
+      module: 'LODGING' as const,
+      category: 'Room type',
+      costPrice: 0,
+      sellingPrice: 75000,
+      normalRate: 75000,
+      isStockable: false,
+    },
+    {
+      name: 'Executive Room',
+      module: 'LODGING' as const,
+      category: 'Room type',
+      costPrice: 0,
+      sellingPrice: 120000,
+      normalRate: 120000,
+      isStockable: false,
+    },
+    {
+      name: 'Laundry',
+      module: 'FOOD' as const,
+      category: 'Service',
+      costPrice: 0,
+      sellingPrice: 5000,
+      isStockable: false,
+    },
+    {
+      name: 'Breakfast',
+      module: 'FOOD' as const,
+      category: 'Service',
+      costPrice: 0,
+      sellingPrice: 8000,
+      isStockable: false,
+    },
+    {
+      name: 'Airport Pickup',
+      module: 'FOOD' as const,
+      category: 'Service',
+      costPrice: 0,
+      sellingPrice: 25000,
+      isStockable: false,
+    },
+    {
+      name: 'Drinks',
+      module: 'BEVERAGE' as const,
+      category: 'Beverages',
+      costPrice: 800,
+      sellingPrice: 1500,
+      isStockable: true,
+      lowStockThreshold: 10,
+    },
+    {
+      name: 'Water',
+      module: 'BEVERAGE' as const,
+      category: 'Beverages',
+      costPrice: 200,
+      sellingPrice: 500,
+      isStockable: true,
+      lowStockThreshold: 20,
+    },
+  ];
+  for (const item of catalogSeed) {
+    const exists = await prisma.product.findFirst({
+      where: { businessId, name: item.name, module: item.module, category: item.category },
+    });
+    if (!exists) await prisma.product.create({ data: { ...item, businessId } });
+  }
   console.log(`Administrator account ready for ${email}`);
 }
 

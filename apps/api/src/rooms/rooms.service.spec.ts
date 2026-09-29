@@ -35,7 +35,7 @@ describe('RoomsService', () => {
       label: '201',
       type: 'Suite',
       capacity: 3,
-      basePrice: 80,
+      basePrice: '80.00',
       status: 'CLEANING' as any,
     });
     expect(prisma.room.create).toHaveBeenCalledWith({

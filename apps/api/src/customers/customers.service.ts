@@ -2,6 +2,8 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
+import { Prisma } from '@prisma/client';
+import { deriveInvoiceFinancials } from '../finance/invoice-financials';
 
 @Injectable()
 export class CustomersService {
@@ -40,20 +42,27 @@ export class CustomersService {
     });
     // Deliberately hide cross-business records as 404 instead of confirming them with 403.
     if (!customer) throw new NotFoundException('Customer not found');
-    const outstandingBalance = customer.bookings.reduce(
-      (sum, booking) =>
-        sum +
-        Number(
-          booking.invoice?.balance ??
-            Math.max(
-              0,
-              Number(booking.totalAmount) -
-                booking.payments.reduce((paid, payment) => paid + Number(payment.amount), 0),
-            ),
-        ),
-      0,
-    );
-    return { ...customer, outstandingBalance };
+    const outstandingBalance = customer.bookings.reduce((sum, booking) => {
+      if (!booking.invoice || booking.invoice.status === 'VOID') return sum;
+      const financials = deriveInvoiceFinancials(
+        booking.invoice.totalAmount,
+        booking.payments.map((payment) => payment.amount),
+      );
+      return sum.plus(financials.balance);
+    }, new Prisma.Decimal(0));
+    return {
+      ...customer,
+      outstandingBalance: outstandingBalance.toFixed(2),
+      bookings: customer.bookings.map((booking) => {
+        if (!booking.invoice) return { ...booking, invoice: null };
+        const derived = deriveInvoiceFinancials(
+          booking.invoice.totalAmount,
+          booking.payments.map((payment) => payment.amount),
+          booking.invoice.status === 'VOID',
+        );
+        return { ...booking, invoice: { ...booking.invoice, amountPaid: derived.amountPaid, balance: derived.balance, status: derived.status } };
+      }),
+    };
   }
 
   async update(businessId: string, id: string, dto: UpdateCustomerDto) {

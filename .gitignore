@@ -12,3 +12,12 @@ apps/api/prisma/*.db
 *.log
 .DS_Store
 Thumbs.db
+**/.env
+**/.env.*
+!**/.env.example
+*.sql
+*.dump
+*.bak
+backups/
+hotel-business-manager-backups/
+pgdata/

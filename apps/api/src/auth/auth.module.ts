@@ -8,9 +8,10 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 import { JwtStrategy } from './jwt.strategy';
 import { RolesGuard } from './roles.guard';
 import { BusinessContextGuard } from './business-context.guard';
+import { ThrottlerModule } from '@nestjs/throttler';
 
 @Module({
-  imports: [PassportModule, JwtModule.register({})],
+  imports: [PassportModule, JwtModule.register({}), ThrottlerModule.forRoot([{ ttl: 60_000, limit: 5 }])],
   controllers: [AuthController],
   providers: [
     AuthService,

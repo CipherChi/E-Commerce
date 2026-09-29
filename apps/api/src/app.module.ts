@@ -8,10 +8,20 @@ import { RoomsModule } from './rooms/rooms.module';
 import { CustomersModule } from './customers/customers.module';
 import { BusinessesModule } from './businesses/businesses.module';
 import { TenantRecordsModule } from './tenant-records/tenant-records.module';
+import { CatalogModule } from './catalog/catalog.module';
+import { InventoryModule } from './inventory/inventory.module';
+import { SalesModule } from './sales/sales.module';
+import { ExpensesModule } from './expenses/expenses.module';
+import { DashboardModule } from './dashboard/dashboard.module';
+import { ReceiptsModule } from './receipts/receipts.module';
+import { BookingsModule } from './bookings/bookings.module';
+import { validateEnvironment } from './config/env.validation';
+import { ActivityLogsModule } from './activity-logs/activity-logs.module';
+import { PaymentsModule } from './payments/payments.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({ isGlobal: true, validate: validateEnvironment }),
     PrismaModule,
     AuthModule,
     PropertiesModule,
@@ -19,6 +29,15 @@ import { TenantRecordsModule } from './tenant-records/tenant-records.module';
     CustomersModule,
     BusinessesModule,
     TenantRecordsModule,
+    CatalogModule,
+    InventoryModule,
+    SalesModule,
+    ExpensesModule,
+    DashboardModule,
+    ReceiptsModule,
+    BookingsModule,
+    ActivityLogsModule,
+    PaymentsModule,
   ],
   controllers: [HealthController],
 })

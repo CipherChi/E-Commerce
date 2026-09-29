@@ -14,6 +14,8 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Request } from 'express';
 import { BusinessContextGuard } from '../auth/business-context.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { Roles } from '../auth/roles.decorator';
+import { RolesGuard } from '../auth/roles.guard';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { CustomersService } from './customers.service';
@@ -37,7 +39,7 @@ export class CustomersController {
   create(@Req() req: Request & { user: { businessId: string } }, @Body() dto: CreateCustomerDto) {
     return this.customers.create(req.user.businessId, dto);
   }
-  @Patch(':id')
+  @Patch(':id') @UseGuards(RolesGuard) @Roles('ADMIN')
   update(
     @Req() req: Request & { user: { businessId: string } },
     @Param('id') id: string,
@@ -45,7 +47,7 @@ export class CustomersController {
   ) {
     return this.customers.update(req.user.businessId, id, dto);
   }
-  @Delete(':id')
+  @Delete(':id') @UseGuards(RolesGuard) @Roles('ADMIN')
   remove(@Req() req: Request & { user: { businessId: string } }, @Param('id') id: string) {
     return this.customers.remove(req.user.businessId, id);
   }

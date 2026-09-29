@@ -1,11 +1,11 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 type Resource = 'booking' | 'payment' | 'invoice';
 const editable: Record<Resource, string[]> = {
   booking: ['checkIn', 'checkOut', 'status', 'totalAmount', 'source'],
   payment: ['amount', 'method', 'reference', 'paidAt'],
-  invoice: ['invoiceNumber', 'items', 'totalAmount', 'amountPaid', 'balance', 'status'],
+  invoice: [],
 };
 
 @Injectable()
@@ -29,6 +29,10 @@ export class TenantRecordsService {
 
   async update(resource: Resource, businessId: string, id: string, input: Record<string, unknown>) {
     await this.get(resource, businessId, id);
+    if (resource === 'payment') throw new BadRequestException('Recorded payments are immutable; record a correcting payment instead');
+    if (resource === 'invoice' && Object.keys(input).some((key) => ['balance', 'amountPaid', 'status', 'totalAmount'].includes(key))) {
+      throw new BadRequestException('Invoice totals and status are derived from its booking and payments');
+    }
     const data = Object.fromEntries(
       Object.entries(input).filter(([key]) => editable[resource].includes(key)),
     );
@@ -38,6 +42,10 @@ export class TenantRecordsService {
   }
 
   async remove(resource: Resource, businessId: string, id: string) {
+    await this.get(resource, businessId, id);
+    if (resource === 'payment' || resource === 'invoice') {
+      throw new BadRequestException(`${resource} records cannot be deleted`);
+    }
     const result = await this.delegate(resource).deleteMany({ where: { id, businessId } });
     if (!result.count) throw new NotFoundException(`${resource} not found`);
     return { success: true };

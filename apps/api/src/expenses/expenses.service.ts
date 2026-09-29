@@ -1,0 +1,22 @@
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { ExpenseDto, CategoryDto } from './dto/expense.dto';
+import { Prisma } from '@prisma/client';
+@Injectable()
+export class ExpensesService {
+ constructor(private prisma: PrismaService) {}
+ async categories(businessId: string, archived = false) { for (const name of ['Electricity','Staff','Maintenance','Other']) await this.prisma.expenseCategory.upsert({where:{businessId_name:{businessId,name}},update:{},create:{businessId,name}}); return this.prisma.expenseCategory.findMany({ where: { businessId, isArchived: archived }, orderBy: { name: 'asc' } }); }
+ async createCategory(businessId: string, dto: CategoryDto) { return this.prisma.expenseCategory.create({ data: { businessId, name: dto.name.trim() } }); }
+ async updateCategory(businessId: string, id: string, dto: CategoryDto) { const r=await this.prisma.expenseCategory.updateMany({where:{id,businessId},data:{name:dto.name.trim()}}); if(!r.count) throw new NotFoundException('Category not found'); return this.prisma.expenseCategory.findFirst({where:{id,businessId}}); }
+ async archiveCategory(businessId: string,id:string) { const r=await this.prisma.expenseCategory.updateMany({where:{id,businessId},data:{isArchived:true}}); if(!r.count) throw new NotFoundException('Category not found'); return {success:true}; }
+ async list(businessId:string,q:{categoryId?:string;from?:string;to?:string;archived?:string}) {
+  const where:any={businessId,isArchived:q.archived==='true'}; if(q.categoryId) where.categoryId=q.categoryId;
+  if(q.from||q.to) where.expenseDate={...(q.from?{gte:new Date(`${q.from}T00:00:00.000Z`)}:{}),...(q.to?{lte:new Date(`${q.to}T00:00:00.000Z`)}:{})};
+  return this.prisma.expense.findMany({where,include:{category:true,createdBy:{select:{id:true,name:true}}},orderBy:[{expenseDate:'desc'},{createdAt:'desc'}]});
+ }
+ async create(businessId:string,userId:string,d:ExpenseDto) { this.validate(d); const cat=await this.prisma.expenseCategory.findFirst({where:{id:d.categoryId,businessId,isArchived:false}}); if(!cat) throw new BadRequestException('Choose an active category'); return this.prisma.expense.create({data:{businessId,createdById:userId,categoryId:d.categoryId,amount:d.amount,description:d.description?.trim()||null,expenseDate:new Date(`${d.expenseDate}T00:00:00.000Z`)},include:{category:true}}); }
+ async update(businessId:string,id:string,d:ExpenseDto) { this.validate(d); const found=await this.prisma.expense.findFirst({where:{id,businessId,isArchived:false}});if(!found)throw new NotFoundException('Expense not found');const cat=await this.prisma.expenseCategory.findFirst({where:{id:d.categoryId,businessId,isArchived:false}});if(!cat)throw new BadRequestException('Choose an active category');return this.prisma.expense.update({where:{id},data:{categoryId:d.categoryId,amount:d.amount,description:d.description?.trim()||null,expenseDate:new Date(`${d.expenseDate}T00:00:00.000Z`)},include:{category:true}}); }
+ async archive(businessId:string,id:string) { const r=await this.prisma.expense.updateMany({where:{id,businessId,isArchived:false},data:{isArchived:true}});if(!r.count)throw new NotFoundException('Expense not found');return {success:true}; }
+ async summary(businessId:string,from?:string,to?:string) { const where:any={businessId,isArchived:false}; if(from||to)where.expenseDate={...(from?{gte:new Date(`${from}T00:00:00.000Z`)}:{}),...(to?{lte:new Date(`${to}T00:00:00.000Z`)}:{})}; const rows=await this.prisma.expense.groupBy({by:['categoryId'],where,_sum:{amount:true}});const cats=await this.prisma.expenseCategory.findMany({where:{businessId}}); const groups=rows.map(r=>({categoryId:r.categoryId,name:cats.find(c=>c.id===r.categoryId)?.name??'Unknown',total:r._sum.amount??new Prisma.Decimal(0)}));return {byCategory:groups,total:groups.reduce((s,x)=>s.plus(x.total),new Prisma.Decimal(0))}; }
+ private validate(d:ExpenseDto){if(!new Prisma.Decimal(d.amount).greaterThan(0))throw new BadRequestException('Amount must be greater than zero');const day=new Date(`${d.expenseDate}T00:00:00.000Z`);const today=new Date();today.setUTCHours(0,0,0,0);if(Number.isNaN(day.getTime())||day>today)throw new BadRequestException('Expense date cannot be in the future');}
+}
