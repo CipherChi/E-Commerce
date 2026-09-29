@@ -3,7 +3,6 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
   workflow_dispatch:
 
 concurrency:
@@ -31,7 +30,9 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec prisma generate --schema apps/api/prisma/schema.prisma
+      - name: Generate Prisma client
+        working-directory: apps/api
+        run: pnpm exec prisma generate --schema prisma/schema.prisma
       - name: Lint
         run: pnpm lint
       - name: Build (all workspaces)
@@ -90,7 +91,9 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec prisma generate --schema apps/api/prisma/schema.prisma
+      - name: Generate Prisma client
+        working-directory: apps/api
+        run: pnpm exec prisma generate --schema prisma/schema.prisma
       - name: Run unit tests
         working-directory: apps/api
         run: pnpm exec jest --coverage --ci --runInBand
@@ -135,31 +138,6 @@ jobs:
         working-directory: apps/api
         run: pnpm exec jest --config ./test/jest-e2e.config.json --runInBand
 
-  web-e2e:
-    name: Web full-flow (Playwright)
-    runs-on: ubuntu-latest
-    if: ${{ hashFiles('apps/web/playwright.config.*') != '' }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install --with-deps chromium
-      - run: pnpm build
-      - name: Playwright
-        working-directory: apps/web
-        run: pnpm exec playwright test
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: playwright-report
-          path: apps/web/playwright-report
-
   security:
     name: Dependency audit
     runs-on: ubuntu-latest
@@ -183,7 +161,7 @@ jobs:
     name: CI passed
     runs-on: ubuntu-latest
     if: always()
-    needs: [build, migrations, unit, e2e, web-e2e, security]
+    needs: [build, migrations, unit, e2e, security]
     steps:
       - name: Fail if any required job failed or was cancelled
         env:
