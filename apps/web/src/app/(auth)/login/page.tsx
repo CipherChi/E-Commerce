@@ -1,11 +1,13 @@
 'use client';
 
 import { FormEvent, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
 export default function LoginPage() {
+  const router = useRouter();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -31,7 +33,7 @@ export default function LoginPage() {
       });
       const profile = profileResponse.ok ? await profileResponse.json() : null;
       const requested = new URLSearchParams(window.location.search).get('returnTo');
-      window.location.assign(profile?.businessId ? (requested?.startsWith('/') ? requested : '/dashboard') : '/business');
+      router.replace(profile?.businessId ? (requested?.startsWith('/') ? requested : '/dashboard') : '/business');
     } catch (cause) {
       setError(
         cause instanceof Error

@@ -4,9 +4,9 @@ import { SalesService } from './sales.service';
 
 describe('SalesService Decimal rules', () => {
   const setup = () => {
-    const product = { id: 'p1', name: 'Room item', sellingPrice: new Prisma.Decimal('10.25'), costPrice: new Prisma.Decimal('4.20'), module: 'RETAIL', isStockable: false };
+    const product = { id: 'p1', name: 'Room item', sellingPrice: new Prisma.Decimal('10.25'), costPrice: new Prisma.Decimal('4.20'), module: 'FOOD', isStockable: false };
     const tx: any = {
-      customer: { findFirst: jest.fn() }, businessModule: { findMany: jest.fn().mockResolvedValue([{ module: 'RETAIL' }]) },
+      customer: { findFirst: jest.fn() }, businessModule: { findMany: jest.fn().mockResolvedValue([{ module: 'FOOD' }]) },
       product: { findMany: jest.fn().mockResolvedValue([product]) }, stockMovement: { aggregate: jest.fn(), createMany: jest.fn() },
       sale: { count: jest.fn().mockResolvedValue(0), create: jest.fn().mockResolvedValue({ id: 's1' }), findFirst: jest.fn().mockResolvedValue({ id: 's1' }) },
     };

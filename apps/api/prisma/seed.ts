@@ -36,7 +36,8 @@ async function main() {
     });
   }
   await prisma.businessModule.upsert({ where: { businessId_module: { businessId: 'default-business-migration', module: BusinessModuleType.LODGING } }, update: {}, create: { businessId: 'default-business-migration', module: BusinessModuleType.LODGING, isEnabled: true } });
-  await prisma.businessModule.upsert({ where: { businessId_module: { businessId: 'default-business-migration', module: BusinessModuleType.FOOD_BEVERAGE } }, update: {}, create: { businessId: 'default-business-migration', module: BusinessModuleType.FOOD_BEVERAGE, isEnabled: true } });
+  await prisma.businessModule.upsert({ where: { businessId_module: { businessId: 'default-business-migration', module: BusinessModuleType.FOOD } }, update: {}, create: { businessId: 'default-business-migration', module: BusinessModuleType.FOOD, isEnabled: true } });
+  await prisma.businessModule.upsert({ where: { businessId_module: { businessId: 'default-business-migration', module: BusinessModuleType.BEVERAGE } }, update: {}, create: { businessId: 'default-business-migration', module: BusinessModuleType.BEVERAGE, isEnabled: true } });
   const roomCategory = await prisma.catalogCategory.upsert({
     where: { businessId_name: { businessId, name: 'Rooms' } },
     update: {},
@@ -59,6 +60,7 @@ async function main() {
       category: 'Room type',
       costPrice: 0,
       sellingPrice: 75000,
+      normalRate: 75000,
       isStockable: false,
     },
     {
@@ -67,11 +69,12 @@ async function main() {
       category: 'Room type',
       costPrice: 0,
       sellingPrice: 120000,
+      normalRate: 120000,
       isStockable: false,
     },
     {
       name: 'Laundry',
-      module: 'FOOD_BEVERAGE' as const,
+      module: 'FOOD' as const,
       category: 'Service',
       costPrice: 0,
       sellingPrice: 5000,
@@ -79,7 +82,7 @@ async function main() {
     },
     {
       name: 'Breakfast',
-      module: 'FOOD_BEVERAGE' as const,
+      module: 'FOOD' as const,
       category: 'Service',
       costPrice: 0,
       sellingPrice: 8000,
@@ -87,7 +90,7 @@ async function main() {
     },
     {
       name: 'Airport Pickup',
-      module: 'FOOD_BEVERAGE' as const,
+      module: 'FOOD' as const,
       category: 'Service',
       costPrice: 0,
       sellingPrice: 25000,
@@ -95,7 +98,7 @@ async function main() {
     },
     {
       name: 'Drinks',
-      module: 'FOOD_BEVERAGE' as const,
+      module: 'BEVERAGE' as const,
       category: 'Beverages',
       costPrice: 800,
       sellingPrice: 1500,
@@ -104,7 +107,7 @@ async function main() {
     },
     {
       name: 'Water',
-      module: 'FOOD_BEVERAGE' as const,
+      module: 'BEVERAGE' as const,
       category: 'Beverages',
       costPrice: 200,
       sellingPrice: 500,

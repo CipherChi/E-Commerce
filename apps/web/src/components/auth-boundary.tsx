@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { apiRequest } from '@/lib/api';
 
@@ -11,12 +11,13 @@ const publicPaths = new Set(['/', '/login', '/register']);
 const ownerOnly = ['/properties', '/bookings', '/products', '/inventory', '/expenses', '/staff', '/settings', '/business'];
 const ownerLinks = [
   ['Dashboard', '/dashboard'], ['Properties', '/properties', 'LODGING'], ['Bookings', '/bookings', 'LODGING'],
-  ['Customers', '/customers'], ['Products & Services', '/products'], ['Inventory (Stock)', '/inventory', 'FOOD_BEVERAGE'],
+  ['Customers', '/customers'], ['Products & Services', '/products'], ['Inventory (Stock)', '/inventory'],
   ['Sales', '/sales'], ['Receipts', '/receipts'], ['Expenses', '/expenses'], ['Staff', '/staff'], ['Settings', '/settings'],
 ] as const;
 
 export function AuthBoundary({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [modules, setModules] = useState<Module[]>([]);
   const [checking, setChecking] = useState(false);
@@ -24,31 +25,31 @@ export function AuthBoundary({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (pathname === '/') {
-      if (sessionStorage.getItem('staywise.accessToken')) apiRequest<Profile>('/auth/me').then(user => window.location.replace(user.businessId ? '/dashboard' : '/business')).catch(() => {});
+      if (sessionStorage.getItem('staywise.accessToken')) apiRequest<Profile>('/auth/me').then(user => router.replace(user.businessId ? '/dashboard' : '/business')).catch(() => {});
       return;
     }
     if (publicPaths.has(pathname)) { setChecking(false); return; }
     setChecking(true);
     if (!sessionStorage.getItem('staywise.accessToken')) {
-      window.location.replace(`/login?returnTo=${encodeURIComponent(pathname)}`);
+      router.replace(`/login?returnTo=${encodeURIComponent(pathname)}`);
       return;
     }
     apiRequest<Profile>('/auth/me').then(async user => {
       setProfile(user);
-      if (!user.businessId && pathname !== '/business') { window.location.replace('/business'); return; }
+      if (!user.businessId && pathname !== '/business') { router.replace('/business'); return; }
       if (user.businessId) {
         const rows = await apiRequest<Module[]>('/businesses/modules'); setModules(rows);
         const staff = user.role !== 'ADMIN' && user.role !== 'OWNER';
         if (staff && ownerOnly.some(path => pathname === path || pathname.startsWith(`${path}/`))) {
-          window.location.replace('/dashboard'); return;
+          router.replace('/dashboard'); return;
         }
       }
-      if (pathname === '/business' && user.businessId) window.location.replace('/dashboard');
+      if (pathname === '/business' && user.businessId) router.replace('/dashboard');
     }).catch(() => {
       sessionStorage.removeItem('staywise.accessToken'); sessionStorage.removeItem('staywise.refreshToken');
-      sessionStorage.removeItem('staywise.user'); window.location.replace('/login');
+      sessionStorage.removeItem('staywise.user'); router.replace('/login');
     }).finally(() => setChecking(false));
-  }, [pathname]);
+  }, [pathname, router]);
 
   if (pathname === '/') return children;
   if (publicPaths.has(pathname)) return children;
@@ -57,14 +58,14 @@ export function AuthBoundary({ children }: { children: React.ReactNode }) {
   async function logout() {
     try { await apiRequest('/auth/logout', { method: 'POST' }); } catch { /* Clear local session regardless. */ }
     sessionStorage.removeItem('staywise.accessToken'); sessionStorage.removeItem('staywise.refreshToken'); sessionStorage.removeItem('staywise.user');
-    window.location.assign('/login');
+    router.replace('/login');
   }
   const staff = profile.role !== 'ADMIN' && profile.role !== 'OWNER';
   const enabled = new Set(modules.filter(m => m.isEnabled).map(m => m.module));
   const links = (staff ? [['Dashboard', '/dashboard'], ['New sale', '/sales/new'], ['Sales history', '/sales'], ['Receipts', '/receipts'], ['Customers', '/customers'], ...(enabled.has('LODGING') ? [['Bookings', '/bookings']] : [])] : ownerLinks)
-    .filter((item: readonly string[]) => (!item[2] || enabled.has(item[2])) && (item[1] !== '/inventory' || ['FOOD_BEVERAGE','RETAIL','GYM'].some(module=>enabled.has(module))));
-  const sidebar = <aside className="flex h-full flex-col bg-[#17352b] px-4 py-6 text-white">
-    <Link href="/dashboard" className="mb-8 px-3 text-sm font-bold tracking-[.18em] text-[#F1E9D6]">STAYWISE</Link>
+    .filter((item: readonly string[]) => (!item[2] || enabled.has(item[2])) && (item[1] !== '/inventory' || ['FOOD','BEVERAGE','GYM'].some(module=>enabled.has(module))));
+  const sidebar = <aside className="flex h-full flex-col bg-primary px-4 py-6 text-white">
+    <Link href="/dashboard" className="mb-8 px-3 text-sm font-bold tracking-[.18em] text-ink">STAYWISE</Link>
     <nav className="space-y-1">{links.map(([label, href]) => <Link key={href} href={href} onClick={() => setOpen(false)} className={`block rounded-xl px-3 py-2.5 text-sm transition ${pathname === href || pathname.startsWith(`${href}/`) ? 'bg-white/15 font-semibold text-white' : 'text-white/75 hover:bg-white/10 hover:text-white'}`}>{label}</Link>)}</nav>
     <div className="mt-auto border-t border-white/15 pt-4"><p className="px-3 text-sm font-semibold">{profile.name}</p><p className="px-3 pt-1 text-xs text-white/60">{staff ? 'Staff' : 'Owner'}{profile.business?.name ? ` · ${profile.business.name}` : ''}</p><button onClick={() => void logout()} className="mt-4 w-full rounded-xl px-3 py-2 text-left text-sm text-white/75 hover:bg-white/10">Sign out</button></div>
   </aside>;

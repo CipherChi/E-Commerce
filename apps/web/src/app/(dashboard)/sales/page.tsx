@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '@/lib/api';
 import { formatMoney, multiplyMoney, subtractMoney, sumMoney } from '@/lib/money';
-type Item = { id: string; name: string; module: string; sellingPrice: string; isStockable: boolean; currentQuantity?: number | null };
+type Item = { id: string; name: string; module: string; sellingPrice: string; normalRate: string; partyRate: string; monthlyPrice: string; isStockable: boolean; currentQuantity?: number | null };
 type Customer = { id: string; name: string; phone: string };
 type StaffMember = { id: string; name: string };
 type Sale = {
@@ -40,7 +40,7 @@ export default function SalesPage() {
   const [method, setMethod] = useState('CASH');
   const [paymentStatus, setPaymentStatus] = useState('PAID');
   const [amountPaid, setAmountPaid] = useState('');
-  const [lines, setLines] = useState<{ productId: string; quantity: number }[]>([]);
+  const [lines, setLines] = useState<{ productId: string; quantity: number; pricingOption: 'NORMAL' | 'PARTY' }[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [filter, setFilter] = useState('');
@@ -77,11 +77,12 @@ export default function SalesPage() {
     void load();
   }, [load]);
   useEffect(() => { void apiRequest<{role:string}>('/auth/me').then(me => { if(me.role==='ADMIN'||me.role==='OWNER') return apiRequest<Array<{user:StaffMember}>>('/businesses/staff').then(rows=>setStaff(rows.map(row=>row.user))); }).catch(()=>{}); }, []);
-  const total = useMemo(() => sumMoney(lines.map(line => multiplyMoney(items.find(item => item.id === line.productId)?.sellingPrice ?? '0', line.quantity))), [lines, items]);
+  const priceFor = (line: { productId: string; pricingOption: 'NORMAL' | 'PARTY' }) => { const item = items.find(i => i.id === line.productId); return item?.module === 'LODGING' ? (line.pricingOption === 'PARTY' ? item.partyRate : item.normalRate) : item?.module === 'GYM' ? item.monthlyPrice : item?.sellingPrice ?? '0'; };
+  const total = useMemo(() => sumMoney(lines.map(line => multiplyMoney(priceFor(line), line.quantity))), [lines, items]);
   function addLine() {
     const available = items.find((i) => !lines.some((l) => l.productId === i.id));
-    if (available) setLines([...lines, { productId: available.id, quantity: 1 }]);
-    else setLines([...lines, { productId: items[0]?.id ?? '', quantity: 1 }]);
+    if (available) setLines([...lines, { productId: available.id, quantity: 1, pricingOption: 'NORMAL' }]);
+    else setLines([...lines, { productId: items[0]?.id ?? '', quantity: 1, pricingOption: 'NORMAL' }]);
   }
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -96,7 +97,7 @@ export default function SalesPage() {
           paymentMethod: method,
           paymentStatus,
           amountPaid: paymentStatus === 'PARTIAL' ? amountPaid : undefined,
-          items: lines.map((l) => ({ productId: l.productId, quantity: l.quantity })),
+          items: lines.map((l) => ({ productId: l.productId, quantity: l.quantity, pricingOption: l.pricingOption })),
         }),
       });
       setCustomerId('');
@@ -187,7 +188,7 @@ export default function SalesPage() {
                     onChange={(e) =>
                       setLines(
                         lines.map((x, i) =>
-                          i === index ? { ...x, productId: e.target.value } : x,
+                          i === index ? { ...x, productId: e.target.value, pricingOption: 'NORMAL' } : x,
                         ),
                       )
                     }
@@ -200,6 +201,7 @@ export default function SalesPage() {
                     ))}
                   </select>
                 </label>
+                {items.find(i => i.id === line.productId)?.module === 'LODGING' && <label className="col-span-full text-xs font-medium text-ink/60">Rate<select value={line.pricingOption} onChange={e => setLines(lines.map((x,i) => i === index ? { ...x, pricingOption: e.target.value as 'NORMAL' | 'PARTY' } : x))} className={field}><option value="NORMAL">Normal rate: {money(items.find(i=>i.id===line.productId)?.normalRate ?? '0')}</option><option value="PARTY">Party rate: {money(items.find(i=>i.id===line.productId)?.partyRate ?? '0')}</option></select></label>}
                 <label className="text-xs font-medium text-ink/60">
                   Qty
                   <input

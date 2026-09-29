@@ -18,10 +18,12 @@ Phase 1 monorepo for reservation-to-cash operations, built with Next.js, NestJS,
 
 Sign in with the seeded administrator account, or register an account and create a business. Business owners can add properties and rooms. Customers and all property records are scoped to the active business; use `/customers` to add, search, edit, and archive customer records.
 
-The tenant-isolation end-to-end suite uses a dedicated real Postgres database. Set `TENANT_TEST_DATABASE_URL` to that database in PowerShell, then run:
+Local development and tenant-isolation tests use separate databases on the same `infra` PostgreSQL server at `localhost:5432`: `hotel_manager` for the app and `hotel_manager_test` for tests. CI creates its own ephemeral `app_test` database; no extra local CI database container is needed.
+
+The tenant-isolation end-to-end suite uses the real `hotel_manager_test` database. Set `TENANT_TEST_DATABASE_URL` to that database in PowerShell, then run:
 
 ```powershell
-$env:TENANT_TEST_DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/hotel_manager_test?schema=public"
+$env:TENANT_TEST_DATABASE_URL = "postgresql://user:password@localhost:5432/hotel_manager_test?schema=public"
 $env:DATABASE_URL = $env:TENANT_TEST_DATABASE_URL
 corepack pnpm --filter api exec prisma migrate deploy
 corepack pnpm --filter api test:e2e:tenant

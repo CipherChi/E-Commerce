@@ -1,10 +1,12 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { FormEvent, useState } from 'react';
 import { apiRequest } from '@/lib/api';
 
 export default function BusinessSetupPage() {
+  const router = useRouter();
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -24,7 +26,7 @@ export default function BusinessSetupPage() {
           logo: form.get('logo') || undefined,
         }),
       });
-      window.location.assign('/dashboard');
+      router.replace('/dashboard');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to create your business');
     } finally {

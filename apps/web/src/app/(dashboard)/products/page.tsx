@@ -8,10 +8,13 @@ import { formatMoney } from '@/lib/money';
 type Item = {
   id: string;
   name: string;
-  module: 'LODGING' | 'FOOD_BEVERAGE' | 'GYM' | 'RETAIL';
+  module: 'LODGING' | 'FOOD' | 'BEVERAGE' | 'GYM';
   category: string | null;
   costPrice: string;
   sellingPrice: string;
+  normalRate: string;
+  partyRate: string;
+  monthlyPrice: string;
   isStockable: boolean;
   currentQuantity?: number | null;
   lowStockThreshold: number | null;
@@ -43,7 +46,7 @@ export default function ProductsPage() {
     }
   }, [module, category, archived]);
   useEffect(() => {
-    const primaryModule: Record<string, Item['module']> = { HOTEL: 'LODGING', APARTMENT: 'LODGING', RESTAURANT: 'FOOD_BEVERAGE', GYM: 'GYM', SUPERMARKET: 'RETAIL' };
+    const primaryModule: Record<string, Item['module']> = { HOTEL: 'LODGING', APARTMENT: 'LODGING', RESTAURANT: 'FOOD', GYM: 'GYM', SUPERMARKET: 'FOOD' };
     const initialModule = primaryModule[sessionStorage.getItem('staywise.primaryType') ?? ''] ?? 'LODGING';
     setModule(initialModule);
     setFormModule(initialModule);
@@ -61,8 +64,9 @@ export default function ProductsPage() {
       name: form.get('name'),
       module: kind,
       category: form.get('category') || undefined,
-      costPrice: String(form.get('costPrice')),
-      sellingPrice: String(form.get('sellingPrice')),
+      ...(kind === 'LODGING' ? { normalRate: String(form.get('normalRate')), partyRate: String(form.get('partyRate')) } : {}),
+      ...(kind === 'GYM' ? { monthlyPrice: String(form.get('monthlyPrice')) } : {}),
+      ...(['FOOD', 'BEVERAGE'].includes(kind) ? { sellingPrice: String(form.get('sellingPrice')), ...(stockable ? { costPrice: String(form.get('costPrice')) } : {}) } : {}),
       isStockable: stockable,
       lowStockThreshold:
         stockable && form.get('lowStockThreshold') !== ''
@@ -136,7 +140,7 @@ export default function ProductsPage() {
         <p className="text-sm font-semibold uppercase tracking-[.18em] text-accent">Catalog</p>
         <h1 className="mt-2 text-4xl font-semibold">Products &amp; services</h1>
         <p className="mt-2 text-ink/60">
-          Manage catalog items across your enabled service modules. <Link className="text-accent" href="/settings">Add another service from Settings anytime: Food &amp; Beverage, Retail Stock, or Gym.</Link>
+          Manage catalog items across your enabled service modules. <Link className="text-accent" href="/settings">Add another service from Settings anytime: Food, Beverage, or Gym.</Link>
         </p>
       </div>
       <section className="mt-8 grid gap-8 lg:grid-cols-[350px_1fr]">
@@ -176,7 +180,7 @@ export default function ProductsPage() {
               }}
               className={field}
             >
-              {enabledModules.map(m => <option key={m} value={m}>{m.replace('_', ' ')}</option>)}
+              {enabledModules.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
           </label>
           <label className="mt-4 block text-sm font-medium">
@@ -184,37 +188,20 @@ export default function ProductsPage() {
             <input
               name="category"
               defaultValue={editing?.category ?? ''}
-              placeholder="e.g. Beverages"
+              placeholder={formModule === 'LODGING' ? 'e.g. Apartment Rate' : formModule === 'GYM' ? 'e.g. Membership' : formModule === 'FOOD' ? 'e.g. Meals' : 'e.g. Beverages'}
               className={field}
             />
           </label>
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <label className="text-sm font-medium">
-              Cost price
-              <input
-                name="costPrice"
-                type="number"
-                min="0"
-                step="0.01"
-                required
-                defaultValue={editing?.costPrice ?? '0'}
-                className={field}
-              />
-            </label>
-            <label className="text-sm font-medium">
-              Selling price
-              <input
-                name="sellingPrice"
-                type="number"
-                min="0"
-                step="0.01"
-                required
-                defaultValue={editing?.sellingPrice ?? '0'}
-                className={field}
-              />
-            </label>
+          <div key={formModule} className="mt-4 grid grid-cols-2 gap-3">
+            {formModule === 'LODGING' && <>
+              <label className="text-sm font-medium">Normal rate<input name="normalRate" type="number" min="0" step="0.01" required placeholder="0" defaultValue={editing?.normalRate ?? ''} className={field} /></label>
+              <label className="text-sm font-medium">Party rate<input name="partyRate" type="number" min="0" step="0.01" required placeholder="0" defaultValue={editing?.partyRate ?? ''} className={field} /></label>
+            </>}
+            {formModule === 'GYM' && <label className="text-sm font-medium">Monthly price<input name="monthlyPrice" type="number" min="0" step="0.01" required placeholder="0" defaultValue={editing?.monthlyPrice ?? ''} className={field} /></label>}
+            {['FOOD', 'BEVERAGE'].includes(formModule) && <label className="text-sm font-medium">Selling price<input name="sellingPrice" type="number" min="0" step="0.01" required placeholder="0" defaultValue={editing?.sellingPrice ?? ''} className={field} /></label>}
+            {stockEnabled && ['FOOD', 'BEVERAGE'].includes(formModule) && <label className="text-sm font-medium">Cost price (optional)<input name="costPrice" type="number" min="0" step="0.01" placeholder="0" defaultValue={editing?.costPrice ?? ''} className={field} /></label>}
           </div>
-          {formModule !== 'LODGING' && (
+          {['FOOD', 'BEVERAGE'].includes(formModule) && (
             <label className="mt-4 flex items-center gap-3 text-sm font-medium">
               <input
                 name="isStockable"
@@ -225,7 +212,7 @@ export default function ProductsPage() {
               <span>Track this item in inventory</span>
             </label>
           )}
-          {stockEnabled && formModule !== 'LODGING' && (
+          {stockEnabled && ['FOOD', 'BEVERAGE'].includes(formModule) && (
             <label className="mt-4 block text-sm font-medium">
               Low stock threshold
               <input
@@ -250,7 +237,7 @@ export default function ProductsPage() {
             <label className="text-sm font-medium">
               Type
               <select className={field} value={module} onChange={(e) => setModule(e.target.value)}>
-                <option value="">All enabled modules</option>{enabledModules.map(m => <option key={m} value={m}>{m.replace('_', ' ')}</option>)}
+                <option value="">All types</option>{enabledModules.map(m => <option key={m} value={m}>{m}</option>)}
               </select>
             </label>
             <label className="text-sm font-medium">
@@ -296,7 +283,7 @@ export default function ProductsPage() {
                 </div>
                 <span className="text-sm text-ink/65">{item.module}</span>
                 <span className="text-sm text-ink/65">{item.category ?? '—'}</span>
-                <span className="text-sm">{formatMoney(item.sellingPrice)}</span>
+                <span className="text-sm">{item.module === 'LODGING' ? `Normal: ${formatMoney(item.normalRate)} / Party: ${formatMoney(item.partyRate)}` : item.module === 'GYM' ? `${formatMoney(item.monthlyPrice)} / month` : formatMoney(item.sellingPrice)}</span>
                 <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm">
                   <span className="text-ink/55">
                     {item.isStockable ? `${item.currentQuantity ?? 0} on hand` : 'Non-stockable'}

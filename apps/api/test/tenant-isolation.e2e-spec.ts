@@ -167,7 +167,7 @@ describe('Cross-business isolation (real Postgres)', () => {
     });
 
     await prisma.businessModule.create({
-      data: { businessId, module: BusinessModuleType.RETAIL, isEnabled: true },
+      data: { businessId, module: BusinessModuleType.FOOD, isEnabled: true },
     });
     const catalogCategory = await prisma.catalogCategory.create({
       data: { businessId, name: 'B private catalog category' },
@@ -177,7 +177,7 @@ describe('Cross-business isolation (real Postgres)', () => {
         businessId,
         category: 'B private product category',
         name: 'B private product',
-        module: BusinessModuleType.RETAIL,
+        module: BusinessModuleType.FOOD,
         costPrice: new Prisma.Decimal(2),
         sellingPrice: new Prisma.Decimal(4),
         isStockable: true,
@@ -312,7 +312,7 @@ describe('Cross-business isolation (real Postgres)', () => {
       {
         id: businessId,
         path: '/businesses/modules',
-        patch: { module: 'RETAIL', isEnabled: false },
+        patch: { module: 'FOOD', isEnabled: false },
         removePath: '/businesses/modules',
       },
     ];
@@ -548,7 +548,7 @@ describe('Cross-business isolation (real Postgres)', () => {
       lowStock: 0,
     });
     expect(dashboard.body.moduleCards).not.toEqual(
-      expect.arrayContaining([expect.objectContaining({ module: 'RETAIL', value: 1 })]),
+      expect.arrayContaining([expect.objectContaining({ module: 'FOOD', value: 1 })]),
     );
     const historicDashboard = await request(app.getHttpServer())
       .get('/dashboard/summary?date=2030-01-01')
@@ -680,7 +680,7 @@ describe('Cross-business isolation (real Postgres)', () => {
     await request(app.getHttpServer())
       .patch('/businesses/modules')
       .set('Authorization', tokenA)
-      .send({ module: 'RETAIL', isEnabled: false })
+      .send({ module: 'FOOD', isEnabled: false })
       .expect(200);
     expect(
       (
@@ -688,7 +688,7 @@ describe('Cross-business isolation (real Postgres)', () => {
           where: {
             businessId_module: {
               businessId: resources.businesses[0].id,
-              module: BusinessModuleType.RETAIL,
+              module: BusinessModuleType.FOOD,
             },
           },
         })

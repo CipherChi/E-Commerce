@@ -7,4 +7,4 @@ export enum PaymentMethod { CASH='CASH', TRANSFER='TRANSFER', POS='POS' }
 export enum InvoiceStatus { DRAFT='DRAFT', ISSUED='ISSUED', PAID='PAID' }
 
 export enum BusinessType { HOTEL='HOTEL', APARTMENT='APARTMENT', RESTAURANT='RESTAURANT', GYM='GYM', SUPERMARKET='SUPERMARKET' }
-export enum BusinessModuleType { LODGING='LODGING', FOOD_BEVERAGE='FOOD_BEVERAGE', GYM='GYM', RETAIL='RETAIL' }
+export enum BusinessModuleType { LODGING='LODGING', FOOD='FOOD', BEVERAGE='BEVERAGE', GYM='GYM' }

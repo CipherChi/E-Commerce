@@ -1,11 +1,13 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { FormEvent, useState } from 'react';
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
 export default function RegisterPage() {
+  const router = useRouter();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -34,7 +36,7 @@ export default function RegisterPage() {
       sessionStorage.setItem('staywise.accessToken', result.accessToken);
       sessionStorage.setItem('staywise.refreshToken', result.refreshToken);
       sessionStorage.setItem('staywise.user', JSON.stringify(result.user));
-      window.location.assign('/business');
+      router.replace('/business');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to create account. Try again.');
     } finally {

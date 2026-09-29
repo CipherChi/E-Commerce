@@ -66,9 +66,9 @@ enum BusinessType {
 
 enum BusinessModuleType {
   LODGING
-  FOOD_BEVERAGE
+  FOOD
+  BEVERAGE
   GYM
-  RETAIL
 }
 
 enum StockMovementType {
@@ -232,6 +232,9 @@ model Product {
   module            BusinessModuleType
   costPrice         Decimal            @db.Decimal(12, 2)
   sellingPrice      Decimal            @db.Decimal(12, 2)
+  normalRate        Decimal            @default(0) @db.Decimal(12, 2)
+  partyRate         Decimal            @default(0) @db.Decimal(12, 2)
+  monthlyPrice      Decimal            @default(0) @db.Decimal(12, 2)
   isStockable       Boolean            @default(false)
   lowStockThreshold Int?
   isArchived        Boolean            @default(false)

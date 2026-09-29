@@ -6,8 +6,8 @@ import { CreateBusinessDto } from './dto/create-business.dto';
 
 const primaryModule: Record<BusinessType, BusinessModuleType> = {
   HOTEL: BusinessModuleType.LODGING, APARTMENT: BusinessModuleType.LODGING,
-  RESTAURANT: BusinessModuleType.FOOD_BEVERAGE, GYM: BusinessModuleType.GYM,
-  SUPERMARKET: BusinessModuleType.RETAIL,
+  RESTAURANT: BusinessModuleType.FOOD, GYM: BusinessModuleType.GYM,
+  SUPERMARKET: BusinessModuleType.FOOD,
 };
 
 @Injectable()

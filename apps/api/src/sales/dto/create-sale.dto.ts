@@ -5,6 +5,7 @@ import {
   IsArray,
   IsEnum,
   IsInt,
+  IsIn,
   IsOptional,
   IsString,
   Matches,
@@ -14,6 +15,7 @@ import {
 class SaleLineDto {
   @IsString() productId!: string;
   @Type(() => Number) @IsInt() @Min(1) quantity!: number;
+  @IsOptional() @IsIn(['NORMAL', 'PARTY']) pricingOption?: 'NORMAL' | 'PARTY';
 }
 export class CreateSaleDto {
   @IsOptional() @IsString() customerId?: string;

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 
 export function PwaShell() {
   const [install, setInstall] = useState<any>(null);
@@ -96,9 +97,9 @@ export function PwaShell() {
           ['/expenses', 'Expenses'],
           ['/receipts', 'Receipts'],
         ].map(([href, label]) => (
-          <a key={href} href={href} className="px-1 py-3 text-ink/75">
+          <Link key={href} href={href} className="px-1 py-3 text-ink/75">
             {label}
-          </a>
+          </Link>
         ))}
       </nav>
     </>

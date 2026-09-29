@@ -6,8 +6,8 @@ Use a dedicated Postgres database for tenant isolation verification. Set `TENANT
 
 ## Catalog, inventory, and sales
 
-Catalog items are business-scoped and assigned to an enabled service module (`LODGING`, `FOOD_BEVERAGE`, `GYM`, or `RETAIL`) with a free-text category. Only `isStockable` items enter inventory; lodging items are always non-stockable. Business owners can enable or disable modules in Settings; disabling hides those items from catalog and sales selection without deleting history. Catalog endpoints are under `/catalog` (including `/catalog/categories`), inventory endpoints under `/inventory`, and completed sales under `/sales`. Sale lines snapshot the current selling price. Completing a sale and its stock deductions happens in one serializable database transaction.
+Catalog items are business-scoped and assigned to an enabled service module (`LODGING`, `FOOD`, `BEVERAGE`, or `GYM`) with a free-text category. Only `isStockable` items enter inventory; lodging items are always non-stockable. Business owners can enable or disable modules in Settings; disabling hides those items from catalog and sales selection without deleting history. Catalog endpoints are under `/catalog` (including `/catalog/categories`), inventory endpoints under `/inventory`, and completed sales under `/sales`. Sale lines snapshot the selected type-specific price. Completing a sale and its stock deductions happens in one serializable database transaction.
 
 `StockMovement.quantity` is a signed delta: `STOCK_IN` uses a positive integer, `STOCK_OUT` uses a negative integer, and `ADJUSTMENT` uses a positive or negative correction with a required reason. Current stock is the sum of these movements; it is not stored on the catalog item. Stock-outs that would take the balance below zero fail.
 
-The seed creates sample catalog items for the default business across Lodging and Food & Beverage modules. Drinks and Water are stockable and have low-stock thresholds.
+The seed creates sample catalog items for the default business across Lodging, Food, and Beverage modules. Drinks and Water are stockable and have low-stock thresholds.

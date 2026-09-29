@@ -31,7 +31,9 @@ export class SalesService {
         const productMap = new Map(products.map((item) => [item.id, item]));
         const normalized = dto.items.map((line) => {
           const product = productMap.get(line.productId)!;
-          const unitPrice = product.sellingPrice;
+          const unitPrice = product.module === 'LODGING'
+            ? (line.pricingOption === 'PARTY' ? product.partyRate : product.normalRate)
+            : product.module === 'GYM' ? product.monthlyPrice : product.sellingPrice;
           return {
             ...line,
             unitPrice,
