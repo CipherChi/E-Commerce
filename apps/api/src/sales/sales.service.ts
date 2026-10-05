@@ -1,9 +1,16 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { Prisma, SalePaymentStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { deriveInvoiceFinancials } from '../finance/invoice-financials';
+
+const MAX_SERIALIZABLE_RETRIES = 10;
 
 @Injectable()
 export class SalesService {
@@ -136,9 +143,14 @@ export class SalesService {
         const duplicate = await this.prisma.sale.findFirst({ where: { businessId, idempotencyKey }, include: this.detailInclude });
         if (duplicate) return duplicate;
       }
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034' && retry < 10) {
-        await new Promise((resolve) => setTimeout(resolve, 10 * 2 ** retry));
-        return this.create(businessId, userId, dto, idempotencyKey, retry + 1);
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') {
+        if (retry < MAX_SERIALIZABLE_RETRIES) {
+          await this.waitBeforeRetry(retry);
+          return this.create(businessId, userId, dto, idempotencyKey, retry + 1);
+        }
+        throw new ServiceUnavailableException(
+          'Sale could not be completed because of concurrent updates. Retry with the same Idempotency-Key.',
+        );
       }
       throw error;
     }
@@ -202,4 +214,8 @@ export class SalesService {
     },
     createdBy: { select: { id: true, name: true } },
   } satisfies Prisma.SaleInclude;
+
+  private waitBeforeRetry(retry: number) {
+    return new Promise<void>((resolve) => setTimeout(resolve, 10 * 2 ** retry));
+  }
 }

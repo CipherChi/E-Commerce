@@ -401,7 +401,12 @@ describe('Cross-business isolation (real Postgres)', () => {
     await prisma.sale.deleteMany({ where: { id: { in: generatedSaleIds } } });
   }, 60000);
 
-  const makeStockableProduct = async (businessId: string, name: string, price: number) => {
+  const makeStockableProduct = async (
+    businessId: string,
+    name: string,
+    price: number,
+    openingStock = 10,
+  ) => {
     await prisma.businessModule.upsert({
       where: { businessId_module: { businessId, module: BusinessModuleType.FOOD } },
       update: { isEnabled: true },
@@ -423,7 +428,7 @@ describe('Cross-business isolation (real Postgres)', () => {
         businessId,
         productId: product.id,
         type: 'STOCK_IN',
-        quantity: 10,
+        quantity: openingStock,
         createdById: member.userId,
         reason: 'e2e opening stock',
       },
@@ -524,6 +529,83 @@ describe('Cross-business isolation (real Postgres)', () => {
     expect(stock._sum.quantity).toBe(7);
     await removeSaleWithMovements(first.body.id);
   });
+
+  it('returns the same sale for five concurrent requests with one idempotency key', async () => {
+    const product = await makeStockableProduct(businessAId, `Concurrent idempotency ${Date.now()}`, 7);
+    const key = `concurrent-idempotency-${Date.now()}`;
+    const responses = await Promise.all(
+      Array.from({ length: 5 }, () => postStockSale(product.id, key)),
+    );
+    expect(responses.map((response) => response.status)).toEqual(Array(5).fill(201));
+    expect(new Set(responses.map((response) => response.body.id)).size).toBe(1);
+    expect(new Set(responses.map((response) => response.body.receiptNumber)).size).toBe(1);
+
+    const saleId = responses[0].body.id;
+    expect(await prisma.sale.count({ where: { businessId: businessAId, idempotencyKey: key } })).toBe(1);
+    expect(
+      await prisma.stockMovement.count({
+        where: { businessId: businessAId, productId: product.id, type: 'STOCK_OUT' },
+      }),
+    ).toBe(1);
+    const stock = await prisma.stockMovement.aggregate({
+      where: { businessId: businessAId, productId: product.id },
+      _sum: { quantity: true },
+    });
+    expect(stock._sum.quantity).toBe(7);
+    await removeSaleWithMovements(saleId);
+  }, 60000);
+
+  it('keeps high-concurrency receipt numbers gap-free for distinct idempotency keys', async () => {
+    const product = await makeStockableProduct(
+      businessAId,
+      `High concurrency ${Date.now()}`,
+      1,
+      100,
+    );
+    const year = Number(
+      new Intl.DateTimeFormat('en', { timeZone: 'Africa/Lagos', year: 'numeric' }).format(new Date()),
+    );
+    const sequenceBefore = await prisma.receiptSequence.findUnique({
+      where: { businessId_year: { businessId: businessAId, year } },
+    });
+    const firstNumber = sequenceBefore?.lastNumber ?? 0;
+    const responses = await Promise.all(
+      Array.from({ length: 30 }, (_, index) =>
+        postStockSale(product.id, `high-concurrency-${Date.now()}-${index}`, 1),
+      ),
+    );
+
+    const successful = responses.filter((response) => response.status === 201);
+    const failed = responses.filter((response) => response.status !== 201);
+    expect(successful.length + failed.length).toBe(30);
+    expect(successful.length).toBeGreaterThan(0);
+    expect(failed.every((response) => response.status === 503)).toBe(true);
+    expect(
+      failed.every((response) =>
+        String(response.body.message).includes('Retry with the same Idempotency-Key'),
+      ),
+    ).toBe(true);
+
+    const receiptNumbers = successful.map((response) => response.body.receiptNumber).sort();
+    expect(new Set(receiptNumbers).size).toBe(successful.length);
+    expect(receiptNumbers).toEqual(
+      Array.from({ length: successful.length }, (_, index) =>
+        `RCT-${year}-${String(firstNumber + index + 1).padStart(6, '0')}`,
+      ),
+    );
+    const saleIds = successful.map((response) => response.body.id);
+    const currentSequence = await prisma.receiptSequence.findUniqueOrThrow({
+      where: { businessId_year: { businessId: businessAId, year } },
+    });
+    expect(currentSequence.lastNumber).toBe(firstNumber + successful.length);
+    const stock = await prisma.stockMovement.aggregate({
+      where: { businessId: businessAId, productId: product.id },
+      _sum: { quantity: true },
+    });
+    expect(stock._sum.quantity).toBe(100 - successful.length);
+    await prisma.stockMovement.deleteMany({ where: { saleId: { in: saleIds } } });
+    await prisma.sale.deleteMany({ where: { id: { in: saleIds } } });
+  }, 90000);
 
   it.each(['customers', 'properties', 'rooms', 'bookings', 'payments', 'invoices'])(
     'rejects Business A GET, PATCH, and DELETE for Business B %s, while preserving the row',

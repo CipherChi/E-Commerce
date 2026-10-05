@@ -1,3 +1,4 @@
+import { ServiceUnavailableException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { SalesService } from './sales.service';
@@ -41,5 +42,41 @@ describe('SalesService Decimal rules', () => {
     await expect(service.create('b1', 'u1', dto, 'key-1')).resolves.toEqual({ id: 'existing-sale' });
     expect(tx.sale.create).not.toHaveBeenCalled();
     expect(tx.receiptSequence.upsert).not.toHaveBeenCalled();
+  });
+
+  it('returns a retryable 503 after exhausting serialization retries', async () => {
+    const conflict = new Prisma.PrismaClientKnownRequestError('write conflict', {
+      code: 'P2034',
+      clientVersion: 'test',
+    });
+    const prisma = {
+      $transaction: jest.fn().mockRejectedValue(conflict),
+      sale: { findFirst: jest.fn().mockResolvedValue(null) },
+    } as unknown as PrismaService;
+    const service = new SalesService(prisma);
+    const waitBeforeRetry = jest
+      .spyOn(service as any, 'waitBeforeRetry')
+      .mockResolvedValue(undefined);
+    await expect(service.create('b1', 'u1', dto, 'key-1')).rejects.toMatchObject({
+      name: 'ServiceUnavailableException',
+      response: expect.objectContaining({
+        statusCode: 503,
+        message: expect.stringContaining('Retry with the same Idempotency-Key'),
+      }),
+    });
+    expect(prisma.$transaction).toHaveBeenCalledTimes(11);
+    expect(waitBeforeRetry).toHaveBeenCalledTimes(10);
+  }, 30000);
+
+  it('does not retry errors other than serialization conflicts', async () => {
+    const failure = new Error('database unavailable');
+    const prisma = {
+      $transaction: jest.fn().mockRejectedValue(failure),
+      sale: { findFirst: jest.fn().mockResolvedValue(null) },
+    } as unknown as PrismaService;
+    const service = new SalesService(prisma);
+
+    await expect(service.create('b1', 'u1', dto, 'key-1')).rejects.toBe(failure);
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
   });
 });
