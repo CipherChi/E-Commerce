@@ -104,7 +104,6 @@ export class SalesService {
             idempotencyKey,
             items: {
               create: normalized.map((line) => ({
-                businessId,
                 productId: line.productId,
                 quantity: line.quantity,
                 unitPrice: line.unitPrice,
@@ -137,7 +136,8 @@ export class SalesService {
         const duplicate = await this.prisma.sale.findFirst({ where: { businessId, idempotencyKey }, include: this.detailInclude });
         if (duplicate) return duplicate;
       }
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034' && retry < 3) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034' && retry < 10) {
+        await new Promise((resolve) => setTimeout(resolve, 10 * 2 ** retry));
         return this.create(businessId, userId, dto, idempotencyKey, retry + 1);
       }
       throw error;
