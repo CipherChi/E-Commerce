@@ -62,6 +62,30 @@ describe('AuthService', () => {
     ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
+  it('returns the business-member role rather than the account role from /auth/me', async () => {
+    prisma.user.findUnique.mockResolvedValue({
+      id: user.id,
+      isActive: true,
+      email: user.email,
+      name: user.name,
+      propertyId: null,
+      memberships: [
+        { businessId: 'business-1', role: 'MANAGER', business: { name: 'Business 1' } },
+      ],
+    });
+
+    await expect(service.me(user.id)).resolves.toMatchObject({
+      role: 'MANAGER',
+      businessId: 'business-1',
+      business: { name: 'Business 1' },
+    });
+    expect(prisma.user.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({ memberships: expect.any(Object) }),
+      }),
+    );
+  });
+
   it('rotates a valid refresh token', async () => {
     prisma.user.findUnique.mockResolvedValue({ ...user, refreshTokenHash: 'stored-hash' });
     prisma.user.update.mockResolvedValue(user);

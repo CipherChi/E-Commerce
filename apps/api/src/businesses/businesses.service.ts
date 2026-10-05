@@ -15,12 +15,14 @@ export class BusinessesService {
   constructor(private prisma: PrismaService) {}
 
   async staff(businessId: string) {
+    // Staff access is determined by the tenant-scoped BusinessMember.role.
     return this.prisma.businessMember.findMany({ where: { businessId, role: 'STAFF' }, include: { user: { select: { id: true, name: true, email: true, isActive: true, createdAt: true } } }, orderBy: { createdAt: 'desc' } });
   }
 
   async createStaff(businessId: string, dto: { name: string; email: string; password: string }) {
     const email = dto.email.toLowerCase().trim();
     if (await this.prisma.user.findUnique({ where: { email } })) throw new ConflictException('Email already registered');
+    // User.role remains account metadata; authorization reads the BusinessMember role above.
     return this.prisma.user.create({ data: { name: dto.name.trim(), email, passwordHash: await argon2.hash(dto.password), role: 'STAFF', memberships: { create: { businessId, role: 'STAFF' } } }, select: { id: true, name: true, email: true, isActive: true, createdAt: true } });
   }
 

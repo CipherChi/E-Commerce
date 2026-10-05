@@ -4,16 +4,17 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { apiRequest } from '@/lib/api';
+import {
+  clearAuthSession,
+  clearAuthSessionAndRedirect,
+  getNavigationLinks,
+} from '@/lib/auth-navigation.mjs';
 
-type Profile = { id: string; name: string; email: string; businessId: string | null; role: string; business?: { name: string } | null };
+// /auth/me exposes the current BusinessMember.role here; User.role is account metadata only.
+type Profile = { id: string; name: string; email: string; businessId: string | null; role: string | null; business?: { name: string } | null };
 type Module = { module: string; isEnabled: boolean };
 const publicPaths = new Set(['/', '/login', '/register']);
 const ownerOnly = ['/properties', '/bookings', '/products', '/inventory', '/expenses', '/staff', '/settings', '/business'];
-const ownerLinks = [
-  ['Dashboard', '/dashboard'], ['Properties', '/properties', 'LODGING'], ['Bookings', '/bookings', 'LODGING'],
-  ['Customers', '/customers'], ['Products & Services', '/products'], ['Inventory (Stock)', '/inventory'],
-  ['Sales', '/sales'], ['Receipts', '/receipts'], ['Expenses', '/expenses'], ['Staff', '/staff'], ['Settings', '/settings'],
-] as const;
 
 export function AuthBoundary({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -26,7 +27,7 @@ export function AuthBoundary({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (pathname.startsWith('/public/receipt/')) { setChecking(false); return; }
     if (pathname === '/') {
-      if (sessionStorage.getItem('staywise.accessToken')) apiRequest<Profile>('/auth/me').then(user => router.replace(user.businessId ? '/dashboard' : '/business')).catch(() => {});
+      if (sessionStorage.getItem('staywise.accessToken')) apiRequest<Profile>('/auth/me').then(user => router.replace(user.businessId ? '/dashboard' : '/business')).catch(() => clearAuthSessionAndRedirect(sessionStorage, () => router.replace('/login')));
       return;
     }
     if (publicPaths.has(pathname)) { setChecking(false); return; }
@@ -40,15 +41,14 @@ export function AuthBoundary({ children }: { children: React.ReactNode }) {
       if (!user.businessId && pathname !== '/business') { router.replace('/business'); return; }
       if (user.businessId) {
         const rows = await apiRequest<Module[]>('/businesses/modules'); setModules(rows);
-        const staff = user.role !== 'ADMIN' && user.role !== 'OWNER';
+        const staff = user.role !== 'OWNER';
         if (staff && ownerOnly.some(path => pathname === path || pathname.startsWith(`${path}/`))) {
           router.replace('/dashboard'); return;
         }
       }
       if (pathname === '/business' && user.businessId) router.replace('/dashboard');
     }).catch(() => {
-      sessionStorage.removeItem('staywise.accessToken'); sessionStorage.removeItem('staywise.refreshToken');
-      sessionStorage.removeItem('staywise.user'); router.replace('/login');
+      clearAuthSessionAndRedirect(sessionStorage, () => router.replace('/login'));
     }).finally(() => setChecking(false));
   }, [pathname, router]);
 
@@ -59,13 +59,12 @@ export function AuthBoundary({ children }: { children: React.ReactNode }) {
 
   async function logout() {
     try { await apiRequest('/auth/logout', { method: 'POST' }); } catch { /* Clear local session regardless. */ }
-    sessionStorage.removeItem('staywise.accessToken'); sessionStorage.removeItem('staywise.refreshToken'); sessionStorage.removeItem('staywise.user');
+    clearAuthSession(sessionStorage);
     router.replace('/login');
   }
-  const staff = profile.role !== 'ADMIN' && profile.role !== 'OWNER';
+  const staff = profile.role !== 'OWNER';
   const enabled = new Set(modules.filter(m => m.isEnabled).map(m => m.module));
-  const links = (staff ? [['Dashboard', '/dashboard'], ['New sale', '/sales/new'], ['Sales history', '/sales'], ['Receipts', '/receipts'], ['Customers', '/customers'], ...(enabled.has('LODGING') ? [['Bookings', '/bookings']] : [])] : ownerLinks)
-    .filter((item: readonly string[]) => (!item[2] || enabled.has(item[2])) && (item[1] !== '/inventory' || ['FOOD','BEVERAGE','GYM'].some(module=>enabled.has(module))));
+  const links = getNavigationLinks(profile.role, [...enabled]);
   const sidebar = <aside className="flex h-full flex-col bg-primary px-4 py-6 text-white">
     <Link href="/dashboard" className="mb-8 px-3 text-sm font-bold tracking-[.18em] text-ink">STAYWISE</Link>
     <nav className="space-y-1">{links.map(([label, href]) => <Link key={href} href={href} onClick={() => setOpen(false)} className={`block rounded-xl px-3 py-2.5 text-sm transition ${pathname === href || pathname.startsWith(`${href}/`) ? 'bg-white/15 font-semibold text-white' : 'text-white/75 hover:bg-white/10 hover:text-white'}`}>{label}</Link>)}</nav>

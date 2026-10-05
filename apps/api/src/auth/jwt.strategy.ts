@@ -29,7 +29,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
     return {
       ...payload,
-      role: membership?.role === 'OWNER' ? 'ADMIN' : payload.role,
+      // Tenant authorization always follows this user's membership in the selected business.
+      role: membership?.role ?? null,
       businessId: membership?.businessId,
     };
   }

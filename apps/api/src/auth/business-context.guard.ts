@@ -3,8 +3,12 @@ import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@
 @Injectable()
 export class BusinessContextGuard implements CanActivate {
   canActivate(context: ExecutionContext) {
-    const request = context.switchToHttp().getRequest<{ user?: { businessId?: string } }>();
-    if (!request.user?.businessId) throw new ForbiddenException('Create or join a business first');
+    const request = context
+      .switchToHttp()
+      .getRequest<{ user?: { businessId?: string; role?: string | null } }>();
+    // JwtStrategy derives both fields from BusinessMember, so a businessless account has no tenant authority.
+    if (!request.user?.businessId || !request.user.role)
+      throw new ForbiddenException('Create or join a business first');
     return true;
   }
 }

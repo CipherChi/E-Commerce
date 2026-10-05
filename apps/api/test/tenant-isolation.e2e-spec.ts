@@ -345,6 +345,66 @@ describe('Cross-business isolation (real Postgres)', () => {
     await app?.close();
   });
 
+  it('uses the current business membership instead of a global ADMIN role', async () => {
+    const businessBId = resources.businesses[0].id;
+    const memberB = await prisma.businessMember.findFirstOrThrow({
+      where: { businessId: businessBId },
+    });
+    expect(
+      await prisma.user.findUniqueOrThrow({ where: { id: memberB.userId } }).then((user) => user.role),
+    ).toBe('ADMIN');
+    await prisma.businessMember.update({
+      where: { businessId_userId: { businessId: businessBId, userId: memberB.userId } },
+      data: { role: 'STAFF' },
+    });
+
+    await request(app.getHttpServer())
+      .get('/businesses/staff')
+      .set('Authorization', tokenB)
+      .expect(403);
+    await request(app.getHttpServer())
+      .get('/businesses/staff')
+      .set('Authorization', tokenA)
+      .expect(200);
+    const dashboard = await request(app.getHttpServer())
+      .get('/dashboard/summary')
+      .set('Authorization', tokenB)
+      .expect(200);
+    expect(dashboard.body.revenue).toBe('0.00');
+    const catalog = await request(app.getHttpServer())
+      .get('/catalog')
+      .set('Authorization', tokenB)
+      .expect(200);
+    const privateProduct = catalog.body.find((product: { id: string }) => product.id === productBId);
+    expect(privateProduct).toBeDefined();
+    expect(privateProduct).not.toHaveProperty('costPrice');
+  });
+
+  it('rejects generic writes for payment and invoice records and exposes no generic money routes', async () => {
+    const paymentId = resources.payments[0].id;
+    const invoiceId = resources.invoices[0].id;
+    const requests: Array<['PATCH' | 'DELETE', string, number, object?]> = [
+      ['PATCH', `/payments/${paymentId}`, 400, { amount: '1.00' }],
+      ['DELETE', `/payments/${paymentId}`, 400],
+      ['PATCH', `/invoices/${invoiceId}`, 400, { amountPaid: '1.00' }],
+      ['DELETE', `/invoices/${invoiceId}`, 400],
+      ['PATCH', `/sales/${saleBId}`, 404, { total: '1.00' }],
+      ['DELETE', `/sales/${saleBId}`, 404],
+      ['PATCH', `/receipts/${saleBId}`, 404, { receiptNumber: 'changed' }],
+      ['DELETE', `/receipts/${saleBId}`, 404],
+      ['PATCH', `/inventory/${productBId}/movements`, 404, { quantity: 100 }],
+      ['DELETE', `/inventory/${productBId}/movements`, 404],
+    ];
+    for (const [method, path, status, body] of requests) {
+      let call = method === 'PATCH'
+        ? request(app.getHttpServer()).patch(path)
+        : request(app.getHttpServer()).delete(path);
+      call = call.set('Authorization', tokenB);
+      if (body) call = call.send(body);
+      await call.expect(status);
+    }
+  });
+
   it('allocates gap-free receipt numbers atomically per business under concurrent sales', async () => {
     const year = new Intl.DateTimeFormat('en', {
       timeZone: 'Africa/Lagos',

@@ -22,13 +22,13 @@ export class CatalogController {
     @Query('is_stockable') is_stockable?: string,
     @Query('is_archived') is_archived?: string,
   ) {
-    return this.catalog.list(req.user.businessId, { module, category, is_stockable, is_archived }).then(items => req.user.role === 'ADMIN' || req.user.role === 'OWNER' ? items : items.map(({ costPrice, ...item }) => item));
+    return this.catalog.list(req.user.businessId, { module, category, is_stockable, is_archived }).then(items => req.user.role === 'OWNER' ? items : items.map(({ costPrice, ...item }) => item));
   }
   @Get('categories') categories(@Req() req: Request & { user: { businessId: string } }) {
     return this.catalog.categories(req.user.businessId);
   }
   @Get(':id') get(@Req() req: Request & { user: { businessId: string; role?: string } }, @Param('id') id: string) {
-    return this.catalog.get(req.user.businessId, id).then(({ costPrice, ...item }) => req.user.role === 'ADMIN' || req.user.role === 'OWNER' ? { costPrice, ...item } : item);
+    return this.catalog.get(req.user.businessId, id).then(({ costPrice, ...item }) => req.user.role === 'OWNER' ? { costPrice, ...item } : item);
   }
   @Post() @UseGuards(RolesGuard) @Roles('ADMIN') create(
     @Req() req: Request & { user: { businessId: string } },

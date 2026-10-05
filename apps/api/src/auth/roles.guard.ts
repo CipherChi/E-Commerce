@@ -11,6 +11,10 @@ export class RolesGuard implements CanActivate {
       context.getClass(),
     ]);
     if (!roles?.length) return true;
-    return roles.includes(context.switchToHttp().getRequest().user?.role);
+    const memberRole = context.switchToHttp().getRequest().user?.role;
+    // Existing @Roles('ADMIN') declarations mean business OWNER; user-level ADMIN is ignored by JwtStrategy.
+    return roles.some((role) =>
+      role === 'ADMIN' ? memberRole === 'OWNER' : role === memberRole,
+    );
   }
 }

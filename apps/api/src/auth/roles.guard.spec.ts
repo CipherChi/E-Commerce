@@ -3,7 +3,12 @@ import { RolesGuard } from './roles.guard';
 import { ROLES_KEY } from './roles.decorator';
 
 describe('RolesGuard', () => {
-  it('allows only roles listed in metadata', () => {
+  it.each([
+    ['OWNER', true],
+    ['MANAGER', false],
+    ['STAFF', false],
+    ['ADMIN', false],
+  ])('evaluates @Roles(ADMIN) from the business-member role %s', (role, allowed) => {
     const reflector = {
       getAllAndOverride: jest.fn().mockReturnValue(['ADMIN']),
     } as unknown as Reflector;
@@ -11,11 +16,9 @@ describe('RolesGuard', () => {
     const context: any = {
       getHandler: () => ({}),
       getClass: () => ({}),
-      switchToHttp: () => ({ getRequest: () => ({ user: { role: 'STAFF' } }) }),
+      switchToHttp: () => ({ getRequest: () => ({ user: { role } }) }),
     };
-    expect(guard.canActivate(context)).toBe(false);
-    context.switchToHttp = () => ({ getRequest: () => ({ user: { role: 'ADMIN' } }) });
-    expect(guard.canActivate(context)).toBe(true);
+    expect(guard.canActivate(context)).toBe(allowed);
     expect(reflector.getAllAndOverride).toHaveBeenCalledWith(ROLES_KEY, expect.any(Array));
   });
 });

@@ -3,6 +3,7 @@
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { safeReturnPath } from '@/lib/auth-navigation.mjs';
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
@@ -33,7 +34,7 @@ export default function LoginPage() {
       });
       const profile = profileResponse.ok ? await profileResponse.json() : null;
       const requested = new URLSearchParams(window.location.search).get('returnTo');
-      router.replace(profile?.businessId ? (requested?.startsWith('/') ? requested : '/dashboard') : '/business');
+      router.replace(profile?.businessId ? safeReturnPath(requested) : '/business');
     } catch (cause) {
       setError(
         cause instanceof Error

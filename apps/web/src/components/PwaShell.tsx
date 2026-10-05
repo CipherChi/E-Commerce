@@ -2,11 +2,17 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { apiRequest } from '@/lib/api';
+import { getMobileNavigationLinks } from '@/lib/auth-navigation.mjs';
+
+type Profile = { role: string | null; businessId: string | null };
+type Module = { module: string; isEnabled: boolean };
 
 export function PwaShell() {
   const [install, setInstall] = useState<any>(null);
   const [online, setOnline] = useState(true);
   const [update, setUpdate] = useState<ServiceWorkerRegistration | null>(null);
+  const [mobileLinks, setMobileLinks] = useState<[string, string][]>([]);
 
   useEffect(() => {
     setOnline(navigator.onLine);
@@ -54,6 +60,23 @@ export function PwaShell() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!sessionStorage.getItem('staywise.accessToken')) return;
+    void apiRequest<Profile>('/auth/me')
+      .then(async (profile) => {
+        const modules = profile.businessId
+          ? await apiRequest<Module[]>('/businesses/modules')
+          : [];
+        setMobileLinks(
+          getMobileNavigationLinks(
+            profile.role,
+            modules.filter((module) => module.isEnabled).map((module) => module.module),
+          ),
+        );
+      })
+      .catch(() => setMobileLinks([]));
+  }, []);
+
   return (
     <>
       <div aria-live="polite" className="fixed left-3 right-3 top-3 z-50 flex flex-col items-center gap-2">
@@ -85,23 +108,19 @@ export function PwaShell() {
           Install app
         </button>
       )}
-      <nav
-        aria-label="Primary"
-        className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t border-ink/10 bg-white/95 pb-[env(safe-area-inset-bottom)] text-center text-[10px] sm:hidden"
-      >
-        {[
-          ['/', 'Home'],
-          ['/sales', 'Sales'],
-          ['/products', 'Products'],
-          ['/inventory', 'Stock'],
-          ['/expenses', 'Expenses'],
-          ['/receipts', 'Receipts'],
-        ].map(([href, label]) => (
-          <Link key={href} href={href} className="px-1 py-3 text-ink/75">
-            {label}
-          </Link>
-        ))}
-      </nav>
+      {mobileLinks.length > 0 && (
+        <nav
+          aria-label="Primary"
+          className="fixed inset-x-0 bottom-0 z-30 grid border-t border-ink/10 bg-white/95 pb-[env(safe-area-inset-bottom)] text-center text-[10px] sm:hidden"
+          style={{ gridTemplateColumns: `repeat(${mobileLinks.length}, minmax(0, 1fr))` }}
+        >
+          {mobileLinks.map(([href, label]) => (
+            <Link key={href} href={href} className="px-1 py-3 text-ink/75">
+              {label}
+            </Link>
+          ))}
+        </nav>
+      )}
     </>
   );
 }

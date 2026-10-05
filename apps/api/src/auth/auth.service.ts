@@ -56,7 +56,6 @@ export class AuthService {
         isActive: true,
         email: true,
         name: true,
-        role: true,
         propertyId: true,
         memberships: {
           orderBy: { createdAt: 'desc' },
@@ -69,7 +68,8 @@ export class AuthService {
     const { memberships = [], ...profile } = user;
     return {
       ...profile,
-      role: memberships[0]?.role === 'OWNER' ? 'ADMIN' : profile.role,
+      // Expose the same membership role used by API authorization, never User.role.
+      role: memberships[0]?.role ?? null,
       business: memberships[0]?.business ?? null,
       businessId: memberships[0]?.businessId ?? null,
     };

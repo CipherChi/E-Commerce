@@ -77,7 +77,7 @@ export default function SalesPage() {
   useEffect(() => {
     void load();
   }, [load]);
-  useEffect(() => { void apiRequest<{role:string}>('/auth/me').then(me => { if(me.role==='ADMIN'||me.role==='OWNER') return apiRequest<Array<{user:StaffMember}>>('/businesses/staff').then(rows=>setStaff(rows.map(row=>row.user))); }).catch(()=>{}); }, []);
+  useEffect(() => { void apiRequest<{role:string|null}>('/auth/me').then(me => { if(me.role==='OWNER') return apiRequest<Array<{user:StaffMember}>>('/businesses/staff').then(rows=>setStaff(rows.map(row=>row.user))); }).catch(()=>{}); }, []);
   const priceFor = (line: { productId: string; pricingOption: 'NORMAL' | 'PARTY' }) => { const item = items.find(i => i.id === line.productId); return item?.module === 'LODGING' ? (line.pricingOption === 'PARTY' ? item.partyRate : item.normalRate) : item?.module === 'GYM' ? item.monthlyPrice : item?.sellingPrice ?? '0'; };
   const total = useMemo(() => sumMoney(lines.map(line => multiplyMoney(priceFor(line), line.quantity))), [lines, items]);
   function addLine() {
