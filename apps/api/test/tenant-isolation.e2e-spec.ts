@@ -345,6 +345,59 @@ describe('Cross-business isolation (real Postgres)', () => {
     await app?.close();
   });
 
+  it('allocates gap-free receipt numbers atomically per business under concurrent sales', async () => {
+    const year = new Intl.DateTimeFormat('en', {
+      timeZone: 'Africa/Lagos',
+      year: 'numeric',
+    }).format(new Date());
+    const makeProduct = async (businessId: string, name: string) => {
+      await prisma.businessModule.upsert({
+        where: { businessId_module: { businessId, module: BusinessModuleType.FOOD } },
+        update: { isEnabled: true },
+        create: { businessId, module: BusinessModuleType.FOOD, isEnabled: true },
+      });
+      return prisma.product.create({
+        data: {
+          businessId,
+          name,
+          module: BusinessModuleType.FOOD,
+          costPrice: new Prisma.Decimal(1),
+          sellingPrice: new Prisma.Decimal(2),
+          isStockable: false,
+        },
+      });
+    };
+    const productA = await makeProduct(businessAId, 'Concurrent sale A');
+    const productB = await makeProduct(resources.businesses[0].id, 'Concurrent sale B');
+    const postSale = (token: string, productId: string, key: string) =>
+      request(app.getHttpServer())
+        .post('/sales')
+        .set('Authorization', token)
+        .set('Idempotency-Key', key)
+        .send({
+          guestName: `Numbering test ${key}`,
+          paymentMethod: 'CASH',
+          paymentStatus: 'UNPAID',
+          items: [{ productId, quantity: 1 }],
+        });
+
+    const salesA = await Promise.all(
+      Array.from({ length: 20 }, (_, index) =>
+        postSale(tokenA, productA.id, `numbering-a-${Date.now()}-${index}`),
+      ),
+    );
+    expect(salesA.map((sale) => sale.status)).toEqual(Array(20).fill(201));
+    const numbersA = salesA.map((sale) => sale.body.receiptNumber).sort();
+    expect(new Set(numbersA).size).toBe(20);
+    expect(numbersA).toEqual(
+      Array.from({ length: 20 }, (_, index) => `RCT-${year}-${String(index + 1).padStart(6, '0')}`),
+    );
+
+    const saleB = await postSale(tokenB, productB.id, `numbering-b-${Date.now()}`);
+    expect(saleB.status).toBe(201);
+    expect(saleB.body.receiptNumber).toBe(`RCT-${year}-000001`);
+  }, 60000);
+
   it.each(['customers', 'properties', 'rooms', 'bookings', 'payments', 'invoices'])(
     'rejects Business A GET, PATCH, and DELETE for Business B %s, while preserving the row',
     async (entity) => {
