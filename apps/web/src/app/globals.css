@@ -125,3 +125,12 @@ button:disabled, [aria-disabled='true'] { cursor: not-allowed; opacity: .55; }
 @supports not (backdrop-filter: blur(1px)) {
   .app-content .auth-card, .app-content .bg-white, .app-content .bg-paper { background-color: var(--color-surface-strong); }
 }
+@media print {
+  @page { margin: 8mm; }
+  body * { visibility: hidden !important; }
+  .receipt-print, .receipt-print * { visibility: visible !important; }
+  .receipt-print { position: absolute; inset: 0 auto auto 0; width: 100%; border: 0 !important; box-shadow: none !important; }
+  .receipt-print[data-paper='58mm'] { width: 58mm; padding: 2mm !important; font-size: 9pt; }
+  .receipt-print[data-paper='80mm'] { width: 80mm; padding: 3mm !important; font-size: 10pt; }
+  .receipt-print[data-paper='58mm'] header, .receipt-print[data-paper='80mm'] header { display: block; }
+}

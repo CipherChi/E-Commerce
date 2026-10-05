@@ -1,1 +1,16 @@
-'use client';import{useEffect,useState}from'react';import{apiRequest}from'@/lib/api';import{useParams}from'next/navigation';import{formatMoney}from'@/lib/money';type R={business:{name:string;address?:string;phone?:string};receiptNumber:string;createdAt:string;recordedBy:string;customer:{name:string;phone?:string};items:{name:string;quantity:number;unitPrice:string;lineSubtotal:string}[];subtotal:string;total:string;paymentMethod:string;paymentStatus:string;amountPaid:string;balance:string};export default function ReceiptPage(){const p=useParams<{saleId:string}>(),[r,S]=useState<R|null>(null);useEffect(()=>{apiRequest<R>(`/receipts/${p.saleId}`).then(S).catch(()=>{})},[p.saleId]);if(!r)return <main className="p-10">Loading receipt…</main>;return <main className="mx-auto max-w-2xl p-6 print:p-0"><article className="rounded-2xl border bg-white p-8 print:border-0"><div className="flex justify-between"><div><h1 className="text-xl font-bold">{r.business.name}</h1><p>{r.business.address}<br/>{r.business.phone}</p></div><div className="text-right"><h2 className="text-2xl font-semibold">Receipt</h2><p>{r.receiptNumber}</p><p>{new Date(r.createdAt).toLocaleString()}</p></div></div><p className="mt-8">Customer: {r.customer.name} {r.customer.phone}</p><p className="mt-1 text-sm text-ink/60">Recorded by: {r.recordedBy}</p><div className="my-4 border-y py-3">{r.items.map(i=><p key={i.name} className="flex justify-between py-2"><span>{i.name} ({i.quantity} × {formatMoney(String(i.unitPrice))})</span><span>{formatMoney(String(i.lineSubtotal))}</span></p>)}</div><p className="text-right">Subtotal {formatMoney(String(r.subtotal))}</p><p className="text-right text-lg font-bold">Total {formatMoney(String(r.total))}</p><p className="mt-3 text-right">{r.paymentMethod} · {r.paymentStatus} · Paid {formatMoney(String(r.amountPaid))} · Due {formatMoney(String(r.balance))}</p><div className="mt-6 flex gap-3 print:hidden"><button onClick={()=>print()} className="rounded-xl bg-accent px-4 py-2 text-white">Print / Save as PDF</button><button onClick={()=>window.open(`https://wa.me/?text=${encodeURIComponent(`Receipt ${r.receiptNumber}: ${location.href}`)}`,'_blank')} className="rounded-xl border px-4 py-2">Share</button><button onClick={()=>void navigator.clipboard.writeText(location.href)} className="rounded-xl border px-4 py-2">Copy link</button></div></article></main>}
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
+import { apiRequest } from '@/lib/api';
+import { ReceiptData, ReceiptView } from '@/components/ReceiptView';
+
+export default function ReceiptPage() {
+  const { saleId } = useParams<{ saleId: string }>();
+  const [receipt, setReceipt] = useState<ReceiptData | null>(null);
+  const [error, setError] = useState('');
+  useEffect(() => { apiRequest<ReceiptData>(`/receipts/${saleId}`).then(setReceipt).catch(() => setError('Unable to load receipt')); }, [saleId]);
+  if (error) return <main className="p-10" role="alert">{error}</main>;
+  if (!receipt) return <main className="p-10">Loading receipt…</main>;
+  return <ReceiptView receipt={receipt} />;
+}

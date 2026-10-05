@@ -24,6 +24,7 @@ export function AuthBoundary({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
+    if (pathname.startsWith('/public/receipt/')) { setChecking(false); return; }
     if (pathname === '/') {
       if (sessionStorage.getItem('staywise.accessToken')) apiRequest<Profile>('/auth/me').then(user => router.replace(user.businessId ? '/dashboard' : '/business')).catch(() => {});
       return;
@@ -52,6 +53,7 @@ export function AuthBoundary({ children }: { children: React.ReactNode }) {
   }, [pathname, router]);
 
   if (pathname === '/') return children;
+  if (pathname.startsWith('/public/receipt/')) return children;
   if (publicPaths.has(pathname)) return children;
   if (checking || !profile || (!profile.businessId && pathname !== '/business')) return <main className="mx-auto max-w-4xl px-6 py-12 text-sm text-ink/60">Checking your session…</main>;
 
