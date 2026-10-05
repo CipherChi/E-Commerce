@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest } from '@/lib/api';
 import { formatMoney, multiplyMoney, subtractMoney, sumMoney } from '@/lib/money';
 type Item = { id: string; name: string; module: string; sellingPrice: string; normalRate: string; partyRate: string; monthlyPrice: string; isStockable: boolean; currentQuantity?: number | null };
@@ -31,6 +31,7 @@ type Sale = {
 const field = 'mt-2 w-full rounded-xl border border-ink/15 bg-white px-4 py-3';
 const money = (n: string | number) => formatMoney(String(n));
 export default function SalesPage() {
+  const idempotencyKey = useRef<string | null>(null);
   const [items, setItems] = useState<Item[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
@@ -89,8 +90,10 @@ export default function SalesPage() {
     setBusy(true);
     setError('');
     try {
+      idempotencyKey.current ??= crypto.randomUUID();
       const sale = await apiRequest<Sale>('/sales', {
         method: 'POST',
+        headers: { 'Idempotency-Key': idempotencyKey.current },
         body: JSON.stringify({
           customerId: customerId || undefined,
           guestName: customerId ? undefined : guest,
@@ -100,6 +103,7 @@ export default function SalesPage() {
           items: lines.map((l) => ({ productId: l.productId, quantity: l.quantity, pricingOption: l.pricingOption })),
         }),
       });
+      idempotencyKey.current = null;
       setCustomerId('');
       setGuest('');
       setLines([]);

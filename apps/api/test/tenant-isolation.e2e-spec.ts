@@ -25,6 +25,7 @@ const schemaTenantCoverageInventory = [
   'Product',
   'StockMovement',
   'Sale',
+  'ReceiptSequence',
   'SaleItem',
   'ExpenseCategory',
   'Expense',
@@ -206,6 +207,7 @@ describe('Cross-business isolation (real Postgres)', () => {
         amountPaid: new Prisma.Decimal(4),
         createdById: memberB.id,
         receiptNumber: `RCPT-TEST-${suffix}`,
+        idempotencyKey: `e2e-${suffix}`,
         items: {
           create: [
             { productId: product.id, quantity: 1, unitPrice: 4, lineSubtotal: 4, costPrice: 2 },

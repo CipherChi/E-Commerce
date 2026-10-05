@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { randomBytes } from 'crypto';
 import { Prisma, SalePaymentStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
@@ -8,9 +9,11 @@ import { deriveInvoiceFinancials } from '../finance/invoice-financials';
 export class SalesService {
   constructor(private prisma: PrismaService) {}
 
-  async create(businessId: string, userId: string, dto: CreateSaleDto) {
-    return this.prisma.$transaction(
+  async create(businessId: string, userId: string, dto: CreateSaleDto, idempotencyKey: string, retry = 0) {
+    try { return await this.prisma.$transaction(
       async (tx) => {
+        const existing = await tx.sale.findFirst({ where: { businessId, idempotencyKey }, include: this.detailInclude });
+        if (existing) return existing;
         if (dto.customerId) {
           const customer = await tx.customer.findFirst({
             where: { id: dto.customerId, businessId, archivedAt: null },
@@ -77,9 +80,14 @@ export class SalesService {
               `Insufficient stock for ${product.name}. Available: ${available}`,
             );
         }
-        const year = new Date().getFullYear();
-        const receiptCount = await tx.sale.count({ where: { businessId, receiptNumber: { startsWith: `RCPT-${year}-` } } });
-        const receiptNumber = `RCPT-${year}-${String(receiptCount + 1).padStart(6, '0')}`;
+        const year = Number(new Intl.DateTimeFormat('en', { timeZone: 'Africa/Lagos', year: 'numeric' }).format(new Date()));
+        const sequence = await tx.receiptSequence.upsert({
+          where: { businessId_year: { businessId, year } },
+          create: { businessId, year, lastNumber: 1 },
+          update: { lastNumber: { increment: 1 } },
+          select: { lastNumber: true },
+        });
+        const receiptNumber = `RCT-${year}-${String(sequence.lastNumber).padStart(6, '0')}`;
         const sale = await tx.sale.create({
           data: {
             businessId,
@@ -92,6 +100,8 @@ export class SalesService {
             amountPaid,
             createdById: userId,
             receiptNumber,
+            receiptToken: randomBytes(32).toString('base64url'),
+            idempotencyKey,
             items: {
               create: normalized.map((line) => ({
                 businessId,
@@ -122,7 +132,16 @@ export class SalesService {
         });
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-    );
+    ); } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        const duplicate = await this.prisma.sale.findFirst({ where: { businessId, idempotencyKey }, include: this.detailInclude });
+        if (duplicate) return duplicate;
+      }
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034' && retry < 3) {
+        return this.create(businessId, userId, dto, idempotencyKey, retry + 1);
+      }
+      throw error;
+    }
   }
 
   async list(

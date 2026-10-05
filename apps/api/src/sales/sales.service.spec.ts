@@ -8,7 +8,8 @@ describe('SalesService Decimal rules', () => {
     const tx: any = {
       customer: { findFirst: jest.fn() }, businessModule: { findMany: jest.fn().mockResolvedValue([{ module: 'FOOD' }]) },
       product: { findMany: jest.fn().mockResolvedValue([product]) }, stockMovement: { aggregate: jest.fn(), createMany: jest.fn() },
-      sale: { count: jest.fn().mockResolvedValue(0), create: jest.fn().mockResolvedValue({ id: 's1' }), findFirst: jest.fn().mockResolvedValue({ id: 's1' }) },
+      receiptSequence: { upsert: jest.fn().mockResolvedValue({ lastNumber: 1 }) },
+      sale: { create: jest.fn().mockResolvedValue({ id: 's1' }), findFirst: jest.fn().mockResolvedValueOnce(null).mockResolvedValue({ id: 's1' }) },
     };
     const prisma = { $transaction: jest.fn((callback: (client: any) => unknown) => callback(tx)), sale: tx.sale } as unknown as PrismaService;
     return { service: new SalesService(prisma), tx };
@@ -16,19 +17,29 @@ describe('SalesService Decimal rules', () => {
   const dto: any = { guestName: 'Walk in', paymentMethod: 'CASH', paymentStatus: 'PARTIAL', amountPaid: '5.10', items: [{ productId: 'p1', quantity: 3 }] };
   it('uses exact Decimal multiplication and allows a valid partial tender', async () => {
     const { service, tx } = setup();
-    await service.create('b1', 'u1', dto);
+    await service.create('b1', 'u1', dto, 'key-1');
     expect(tx.sale.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ subtotal: new Prisma.Decimal('30.75'), amountPaid: new Prisma.Decimal('5.10'), items: { create: [expect.objectContaining({ unitPrice: new Prisma.Decimal('10.25'), lineSubtotal: new Prisma.Decimal('30.75') })] } }) }));
+    expect(tx.sale.create.mock.calls[0][0].data).toEqual(expect.objectContaining({ receiptNumber: expect.stringMatching(/^RCT-\d{4}-000001$/), receiptToken: expect.any(String), idempotencyKey: 'key-1' }));
+    expect(tx.receiptSequence.upsert).toHaveBeenCalledWith(expect.objectContaining({ where: { businessId_year: { businessId: 'b1', year: expect.any(Number) } } }));
   });
   it('rejects zero or full amount as a partial tender before writing a sale', async () => {
     const { service, tx } = setup();
-    await expect(service.create('b1', 'u1', { ...dto, amountPaid: '0' })).rejects.toThrow('Partial payment');
+    await expect(service.create('b1', 'u1', { ...dto, amountPaid: '0' }, 'key-1')).rejects.toThrow('Partial payment');
     expect(tx.sale.create).not.toHaveBeenCalled();
   });
   it('rejects an amount on an unpaid sale and a non-total paid tender', async () => {
     const first = setup();
-    await expect(first.service.create('b1', 'u1', { ...dto, paymentStatus: 'UNPAID', amountPaid: '1.00' })).rejects.toThrow('Unpaid sales');
+    await expect(first.service.create('b1', 'u1', { ...dto, paymentStatus: 'UNPAID', amountPaid: '1.00' }, 'key-1')).rejects.toThrow('Unpaid sales');
     const second = setup();
-    await expect(second.service.create('b1', 'u1', { ...dto, paymentStatus: 'PAID', amountPaid: '29.00' })).rejects.toThrow('Paid sales');
+    await expect(second.service.create('b1', 'u1', { ...dto, paymentStatus: 'PAID', amountPaid: '29.00' }, 'key-1')).rejects.toThrow('Paid sales');
     expect(second.tx.sale.create).not.toHaveBeenCalled();
+  });
+
+  it('returns the original sale when the tenant reuses an idempotency key', async () => {
+    const { service, tx } = setup();
+    tx.sale.findFirst.mockReset().mockResolvedValue({ id: 'existing-sale' });
+    await expect(service.create('b1', 'u1', dto, 'key-1')).resolves.toEqual({ id: 'existing-sale' });
+    expect(tx.sale.create).not.toHaveBeenCalled();
+    expect(tx.receiptSequence.upsert).not.toHaveBeenCalled();
   });
 });
