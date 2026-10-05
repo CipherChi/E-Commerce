@@ -16,6 +16,7 @@ Thumbs.db
 **/.env.*
 !**/.env.example
 *.sql
+!apps/api/prisma/migrations/**/*.sql
 *.dump
 *.bak
 backups/
