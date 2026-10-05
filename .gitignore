@@ -10,6 +10,8 @@ coverage/
 !.env.example
 apps/api/prisma/*.db
 *.log
+apps/web/test-results/
+apps/web/playwright-report/
 .DS_Store
 Thumbs.db
 **/.env

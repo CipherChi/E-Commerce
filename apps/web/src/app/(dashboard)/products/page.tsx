@@ -66,7 +66,7 @@ export default function ProductsPage() {
       category: form.get('category') || undefined,
       ...(kind === 'LODGING' ? { normalRate: String(form.get('normalRate')), partyRate: String(form.get('partyRate')) } : {}),
       ...(kind === 'GYM' ? { monthlyPrice: String(form.get('monthlyPrice')) } : {}),
-      ...(['FOOD', 'BEVERAGE'].includes(kind) ? { sellingPrice: String(form.get('sellingPrice')), ...(stockable ? { costPrice: String(form.get('costPrice')) } : {}) } : {}),
+      ...(['FOOD', 'BEVERAGE'].includes(kind) ? { sellingPrice: String(form.get('sellingPrice')), ...(stockable && form.get('costPrice') ? { costPrice: String(form.get('costPrice')) } : {}) } : {}),
       isStockable: stockable,
       lowStockThreshold:
         stockable && form.get('lowStockThreshold') !== ''
