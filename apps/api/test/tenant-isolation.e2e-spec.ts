@@ -396,7 +396,134 @@ describe('Cross-business isolation (real Postgres)', () => {
     const saleB = await postSale(tokenB, productB.id, `numbering-b-${Date.now()}`);
     expect(saleB.status).toBe(201);
     expect(saleB.body.receiptNumber).toBe(`RCT-${year}-000001`);
+    const generatedSaleIds = [...salesA.map((sale) => sale.body.id), saleB.body.id];
+    await prisma.stockMovement.deleteMany({ where: { saleId: { in: generatedSaleIds } } });
+    await prisma.sale.deleteMany({ where: { id: { in: generatedSaleIds } } });
   }, 60000);
+
+  const makeStockableProduct = async (businessId: string, name: string, price: number) => {
+    await prisma.businessModule.upsert({
+      where: { businessId_module: { businessId, module: BusinessModuleType.FOOD } },
+      update: { isEnabled: true },
+      create: { businessId, module: BusinessModuleType.FOOD, isEnabled: true },
+    });
+    const product = await prisma.product.create({
+      data: {
+        businessId,
+        name,
+        module: BusinessModuleType.FOOD,
+        costPrice: new Prisma.Decimal(5),
+        sellingPrice: new Prisma.Decimal(price),
+        isStockable: true,
+      },
+    });
+    const member = await prisma.businessMember.findFirstOrThrow({ where: { businessId } });
+    await prisma.stockMovement.create({
+      data: {
+        businessId,
+        productId: product.id,
+        type: 'STOCK_IN',
+        quantity: 10,
+        createdById: member.userId,
+        reason: 'e2e opening stock',
+      },
+    });
+    return product;
+  };
+
+  const postStockSale = (productId: string, key: string, quantity = 3) =>
+    request(app.getHttpServer())
+      .post('/sales')
+      .set('Authorization', tokenA)
+      .set('Idempotency-Key', key)
+      .send({
+        guestName: `Sale test ${key}`,
+        paymentMethod: 'CASH',
+        paymentStatus: 'UNPAID',
+        items: [{ productId, quantity }],
+      });
+
+  const removeSaleWithMovements = async (saleId: string) => {
+    await prisma.stockMovement.deleteMany({ where: { saleId } });
+    await prisma.sale.delete({ where: { id: saleId } });
+  };
+
+  it('completes a stock sale and persists each item with the sale tenant', async () => {
+    const product = await makeStockableProduct(businessAId, `Stock sale ${Date.now()}`, 12.5);
+    const response = await postStockSale(product.id, `single-sale-${Date.now()}`);
+    expect(response.status).toBe(201);
+    expect(response.body.receiptNumber).toMatch(/^RCT-\d{4}-\d{6}$/);
+    expect(response.body.subtotal).toBe('37.5');
+    expect(response.body.total).toBe('37.5');
+    expect(response.body.items).toHaveLength(1);
+
+    const sale = await prisma.sale.findUniqueOrThrow({
+      where: { id: response.body.id },
+      include: { items: true, movements: true },
+    });
+    expect(
+      sale.items.every((item) => item.businessId === sale.businessId && item.businessId !== null),
+    ).toBe(true);
+    expect(
+      sale.movements.some((movement) => movement.type === 'STOCK_OUT' && movement.quantity === -3),
+    ).toBe(true);
+    const stock = await prisma.stockMovement.aggregate({
+      where: { businessId: businessAId, productId: product.id },
+      _sum: { quantity: true },
+    });
+    expect(stock._sum.quantity).toBe(7);
+    await removeSaleWithMovements(sale.id);
+  });
+
+  it('does not burn a receipt number when insufficient stock rejects a sale', async () => {
+    const product = await makeStockableProduct(businessAId, `Rollback sale ${Date.now()}`, 9);
+    const year = Number(
+      new Intl.DateTimeFormat('en', { timeZone: 'Africa/Lagos', year: 'numeric' }).format(
+        new Date(),
+      ),
+    );
+    const before = await prisma.receiptSequence.findUnique({
+      where: { businessId_year: { businessId: businessAId, year } },
+    });
+    const failed = await postStockSale(product.id, `failed-sale-${Date.now()}`, 11);
+    expect(failed.status).toBe(400);
+    const afterFailure = await prisma.receiptSequence.findUnique({
+      where: { businessId_year: { businessId: businessAId, year } },
+    });
+    expect(afterFailure?.lastNumber ?? 0).toBe(before?.lastNumber ?? 0);
+
+    const successful = await postStockSale(product.id, `after-failed-sale-${Date.now()}`, 3);
+    expect(successful.status).toBe(201);
+    expect(successful.body.receiptNumber).toBe(
+      `RCT-${year}-${String((before?.lastNumber ?? 0) + 1).padStart(6, '0')}`,
+    );
+    await removeSaleWithMovements(successful.body.id);
+  });
+
+  it('makes a repeated idempotency key create one sale, stock deduction, and receipt', async () => {
+    const product = await makeStockableProduct(businessAId, `Idempotent sale ${Date.now()}`, 7);
+    const key = `idempotent-sale-${Date.now()}`;
+    const first = await postStockSale(product.id, key);
+    const second = await postStockSale(product.id, key);
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(201);
+    expect(second.body.id).toBe(first.body.id);
+    expect(second.body.receiptNumber).toBe(first.body.receiptNumber);
+    expect(
+      await prisma.sale.count({ where: { businessId: businessAId, idempotencyKey: key } }),
+    ).toBe(1);
+    expect(
+      await prisma.stockMovement.count({
+        where: { businessId: businessAId, productId: product.id, type: 'STOCK_OUT' },
+      }),
+    ).toBe(1);
+    const stock = await prisma.stockMovement.aggregate({
+      where: { businessId: businessAId, productId: product.id },
+      _sum: { quantity: true },
+    });
+    expect(stock._sum.quantity).toBe(7);
+    await removeSaleWithMovements(first.body.id);
+  });
 
   it.each(['customers', 'properties', 'rooms', 'bookings', 'payments', 'invoices'])(
     'rejects Business A GET, PATCH, and DELETE for Business B %s, while preserving the row',
@@ -609,7 +736,11 @@ describe('Cross-business isolation (real Postgres)', () => {
       .get('/dashboard/summary?date=2030-01-01')
       .set('Authorization', tokenA)
       .expect(200);
-    expect(historicDashboard.body.occupancy).toMatchObject({ occupiedRooms: 0, reservedRooms: 0, totalBookableRooms: 1 });
+    expect(historicDashboard.body.occupancy).toMatchObject({
+      occupiedRooms: 0,
+      reservedRooms: 0,
+      totalBookableRooms: 1,
+    });
     expect(historicDashboard.body.arrivalsToday).toBe(0);
     expect(historicDashboard.body.departuresToday).toBe(0);
 
@@ -787,8 +918,14 @@ describe('Cross-business isolation (real Postgres)', () => {
   it('hides invoice details and rejects payment writes across businesses', async () => {
     const invoice = resources.invoices[0];
     await request(app.getHttpServer()).get(invoice.path).set('Authorization', tokenA).expect(404);
-    await request(app.getHttpServer()).get(`${invoice.path}/payments`).set('Authorization', tokenA).expect(404);
-    await request(app.getHttpServer()).post(`${invoice.path}/payments`).set('Authorization', tokenA)
-      .send({ amount: '1.00', method: 'CASH', reference: 'cross-tenant' }).expect(404);
+    await request(app.getHttpServer())
+      .get(`${invoice.path}/payments`)
+      .set('Authorization', tokenA)
+      .expect(404);
+    await request(app.getHttpServer())
+      .post(`${invoice.path}/payments`)
+      .set('Authorization', tokenA)
+      .send({ amount: '1.00', method: 'CASH', reference: 'cross-tenant' })
+      .expect(404);
   });
 });
