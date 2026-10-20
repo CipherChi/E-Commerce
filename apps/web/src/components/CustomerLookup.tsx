@@ -27,6 +27,8 @@ export function CustomerLookup({
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<CustomerOption | null>(null);
   const [results, setResults] = useState<CustomerOption[]>([]);
+  const [resultTotal, setResultTotal] = useState(0);
+  const [resultPage, setResultPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -38,6 +40,8 @@ export function CustomerLookup({
     const term = query.trim();
     if (term.length < 2 || value) {
       setResults([]);
+      setResultTotal(0);
+      setResultPage(1);
       setLoading(false);
       setError('');
       return;
@@ -45,12 +49,15 @@ export function CustomerLookup({
 
     let current = true;
     setLoading(true);
+    setResults([]);
+    setResultTotal(0);
     const timeout = window.setTimeout(() => {
-      const params = new URLSearchParams({ q: term, page: '1', pageSize: '20' });
+      const params = new URLSearchParams({ q: term, page: String(resultPage), pageSize: '20' });
       void apiRequest<CustomerPage>(`/customers?${params}`)
         .then((page) => {
           if (current) {
             setResults(page.data);
+            setResultTotal(page.total);
             setError('');
           }
         })
@@ -69,12 +76,14 @@ export function CustomerLookup({
       current = false;
       window.clearTimeout(timeout);
     };
-  }, [query, value]);
+  }, [query, value, resultPage]);
 
   function select(customer: CustomerOption) {
     setSelected(customer);
     setQuery('');
     setResults([]);
+    setResultTotal(0);
+    setResultPage(1);
     onChange(customer.id);
   }
 
@@ -133,6 +142,13 @@ export function CustomerLookup({
             </li>
           ))}
         </ul>
+      )}
+      {!value && resultTotal > 20 && results.length > 0 && (
+        <nav aria-label="Customer search pages" className="mt-2 flex items-center justify-between gap-2">
+          <button type="button" className="min-h-11 rounded-lg border px-3 text-xs disabled:opacity-50" disabled={resultPage <= 1 || loading} onClick={() => setResultPage((current) => current - 1)}>Previous</button>
+          <span>Page {resultPage} of {Math.ceil(resultTotal / 20)}</span>
+          <button type="button" className="min-h-11 rounded-lg border px-3 text-xs disabled:opacity-50" disabled={resultPage >= Math.ceil(resultTotal / 20) || loading} onClick={() => setResultPage((current) => current + 1)}>Next</button>
+        </nav>
       )}
     </div>
   );
