@@ -372,10 +372,10 @@ describe('Cross-business isolation (real Postgres)', () => {
       .expect(200);
     expect(dashboard.body.revenue).toBe('0.00');
     const catalog = await request(app.getHttpServer())
-      .get('/catalog')
+      .get('/catalog?pageSize=100')
       .set('Authorization', tokenB)
       .expect(200);
-    const privateProduct = catalog.body.find((product: { id: string }) => product.id === productBId);
+    const privateProduct = catalog.body.data.find((product: { id: string }) => product.id === productBId);
     expect(privateProduct).toBeDefined();
     expect(privateProduct).not.toHaveProperty('costPrice');
   });
@@ -770,17 +770,17 @@ describe('Cross-business isolation (real Postgres)', () => {
 
   it('does not return another business customer from list or search', async () => {
     const list = await request(app.getHttpServer())
-      .get('/customers')
+      .get('/customers?pageSize=100')
       .set('Authorization', tokenA)
       .expect(200);
     const search = await request(app.getHttpServer())
-      .get('/customers?q=Business%20B%20customer')
+      .get('/customers?q=Business%20B%20customer&pageSize=100')
       .set('Authorization', tokenA)
       .expect(200);
-    expect(list.body).not.toEqual(
+    expect(list.body.data).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ name: 'Business B customer' })]),
     );
-    expect(search.body).toEqual([]);
+    expect(search.body.data).toEqual([]);
   });
 
   it('keeps booking lists tenant scoped and rejects foreign rooms, customers, and booking actions', async () => {
@@ -862,7 +862,7 @@ describe('Cross-business isolation (real Postgres)', () => {
 
   it('keeps catalog, inventory, sales, receipts, expenses and activity tenant scoped', async () => {
     const catalog = await request(app.getHttpServer())
-      .get('/catalog')
+      .get('/catalog?pageSize=100')
       .set('Authorization', tokenA)
       .expect(200);
     const categories = await request(app.getHttpServer())
@@ -878,7 +878,7 @@ describe('Cross-business isolation (real Postgres)', () => {
       .set('Authorization', tokenA)
       .expect(200);
     const sales = await request(app.getHttpServer())
-      .get('/sales')
+      .get('/sales?pageSize=100')
       .set('Authorization', tokenA)
       .expect(200);
     const expenses = await request(app.getHttpServer())
@@ -902,7 +902,7 @@ describe('Cross-business isolation (real Postgres)', () => {
       .set('Authorization', tokenA)
       .expect(200);
 
-    expect(catalog.body).not.toEqual(
+    expect(catalog.body.data).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ id: productBId })]),
     );
     expect(categories.body).not.toEqual(
@@ -914,7 +914,7 @@ describe('Cross-business isolation (real Postgres)', () => {
     expect(lowStock.body).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ id: productBId })]),
     );
-    expect(sales.body).not.toEqual(
+    expect(sales.body.data).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ id: saleBId })]),
     );
     expect(expenses.body).not.toEqual(

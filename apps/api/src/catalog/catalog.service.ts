@@ -6,18 +6,29 @@ const labels: Record<BusinessModuleType, string> = { LODGING: 'Lodging', FOOD: '
 @Injectable()
 export class CatalogService {
   constructor(private prisma: PrismaService) {}
-  async list(businessId: string, filters: { module?: BusinessModuleType; category?: string; is_stockable?: string; is_archived?: string }) {
+  async list(businessId: string, filters: { module?: BusinessModuleType; category?: string; is_stockable?: string; is_archived?: string; q?: string; page?: number; pageSize?: number }) {
     const enabled = await this.prisma.businessModule.findMany({ where: { businessId, isEnabled: true }, select: { module: true } });
     const where: Prisma.ProductWhereInput = { businessId, module: { in: enabled.map(m => m.module) } };
     if (filters.module) where.module = filters.module;
     if (filters.category) where.category = { contains: filters.category, mode: 'insensitive' };
+    if (filters.q?.trim()) where.name = { contains: filters.q.trim(), mode: 'insensitive' };
     if (filters.is_stockable !== undefined) where.isStockable = filters.is_stockable === 'true';
     where.isArchived = filters.is_archived === 'true';
-    const items = await this.prisma.product.findMany({ where, orderBy: { name: 'asc' } });
+    const page = filters.page ?? 1;
+    const pageSize = filters.pageSize ?? 25;
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.product.findMany({ where, orderBy: { name: 'asc' }, skip: (page - 1) * pageSize, take: pageSize }),
+      this.prisma.product.count({ where }),
+    ]);
     const ids = items.filter(i => i.isStockable).map(i => i.id);
     const totals = ids.length ? await this.prisma.stockMovement.groupBy({ by: ['productId'], where: { businessId, productId: { in: ids } }, _sum: { quantity: true } }) : [];
     const quantities = new Map(totals.map(x => [x.productId, x._sum.quantity ?? 0]));
-    return items.map(item => ({ ...item, currentQuantity: item.isStockable ? quantities.get(item.id) ?? 0 : null }));
+    return {
+      data: items.map(item => ({ ...item, currentQuantity: item.isStockable ? quantities.get(item.id) ?? 0 : null })),
+      total,
+      page,
+      pageSize,
+    };
   }
   async categories(businessId: string) {
     const rows = await this.prisma.product.findMany({ where: { businessId, category: { not: null } }, distinct: ['category'], select: { category: true }, orderBy: { category: 'asc' } });

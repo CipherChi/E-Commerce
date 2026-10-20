@@ -1,6 +1,5 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { BusinessModuleType } from '@prisma/client';
 import { Request } from 'express';
 import { BusinessContextGuard } from '../auth/business-context.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -8,6 +7,7 @@ import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { CatalogService } from './catalog.service';
 import { CreateCatalogItemDto, UpdateCatalogItemDto } from './dto/catalog.dto';
+import { ListCatalogDto } from './dto/list-catalog.dto';
 
 @ApiTags('catalog')
 @ApiBearerAuth()
@@ -17,12 +17,11 @@ export class CatalogController {
   constructor(private readonly catalog: CatalogService) {}
   @Get() list(
     @Req() req: Request & { user: { businessId: string; role?: string } },
-    @Query('module') module?: BusinessModuleType,
-    @Query('category') category?: string,
-    @Query('is_stockable') is_stockable?: string,
-    @Query('is_archived') is_archived?: string,
+    @Query() query: ListCatalogDto,
   ) {
-    return this.catalog.list(req.user.businessId, { module, category, is_stockable, is_archived }).then(items => req.user.role === 'OWNER' ? items : items.map(({ costPrice, ...item }) => item));
+    return this.catalog.list(req.user.businessId, query).then(result => req.user.role === 'OWNER'
+      ? result
+      : { ...result, data: result.data.map(({ costPrice, ...item }) => item) });
   }
   @Get('categories') categories(@Req() req: Request & { user: { businessId: string } }) {
     return this.catalog.categories(req.user.businessId);

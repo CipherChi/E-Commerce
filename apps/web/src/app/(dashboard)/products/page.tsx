@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { apiRequest } from '@/lib/api';
 import { formatMoney } from '@/lib/money';
 
@@ -20,31 +20,51 @@ type Item = {
   lowStockThreshold: number | null;
   isArchived: boolean;
 };
+type CatalogPage = { data: Item[]; total: number; page: number; pageSize: number };
 const field = 'mt-2 w-full rounded-xl border border-ink/15 bg-white px-4 py-3';
+const catalogPageSize = 25;
 
 export default function ProductsPage() {
   const [items, setItems] = useState<Item[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [module, setModule] = useState('');
   const [category, setCategory] = useState('');
   const [archived, setArchived] = useState(false);
+  const [search, setSearch] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
   const [editing, setEditing] = useState<Item | null>(null);
   const [formModule, setFormModule] = useState<Item['module']>('LODGING');
   const [enabledModules, setEnabledModules] = useState<Item['module'][]>([]);
   const [stockEnabled, setStockEnabled] = useState(false);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const requestVersion = useRef(0);
   const load = useCallback(async () => {
+    const version = ++requestVersion.current;
     const q = new URLSearchParams();
     if (module) q.set('module', module);
     if (category) q.set('category', category);
     if (archived) q.set('is_archived', 'true');
+    if (searchTerm) q.set('q', searchTerm);
+    q.set('page', String(page));
+    q.set('pageSize', String(catalogPageSize));
+    setLoading(true);
     try {
-      setItems(await apiRequest<Item[]>(`/catalog${q.size ? `?${q}` : ''}`));
+      const result = await apiRequest<CatalogPage>(`/catalog?${q}`);
+      if (version !== requestVersion.current) return;
+      setItems(result.data);
+      setTotal(result.total);
       setError('');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unable to load catalog');
+      if (version === requestVersion.current) {
+        setError(e instanceof Error ? e.message : 'Unable to load catalog');
+      }
+    } finally {
+      if (version === requestVersion.current) setLoading(false);
     }
-  }, [module, category, archived]);
+  }, [module, category, archived, searchTerm, page]);
   useEffect(() => {
     const primaryModule: Record<string, Item['module']> = { HOTEL: 'LODGING', APARTMENT: 'LODGING', RESTAURANT: 'FOOD', GYM: 'GYM', SUPERMARKET: 'FOOD' };
     const initialModule = primaryModule[sessionStorage.getItem('staywise.primaryType') ?? ''] ?? 'LODGING';
@@ -53,6 +73,10 @@ export default function ProductsPage() {
     void apiRequest<Array<{module: Item['module']; isEnabled: boolean}>>('/businesses/modules').then(rows => setEnabledModules(rows.filter(r => r.isEnabled).map(r => r.module))).catch(() => {});
   }, []);
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSearchTerm(search.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [search]);
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -76,8 +100,15 @@ export default function ProductsPage() {
     setBusy(true);
     setError('');
     try {
-      const currentCatalog = await apiRequest<Item[]>('/catalog');
-      const duplicate = currentCatalog.some(
+      const duplicateParams = new URLSearchParams({
+        module: kind,
+        q: String(body.name),
+        page: '1',
+        pageSize: '100',
+      });
+      if (body.category) duplicateParams.set('category', String(body.category));
+      const currentCatalog = await apiRequest<CatalogPage>(`/catalog?${duplicateParams}`);
+      const duplicate = currentCatalog.data.some(
         (item) =>
           item.id !== editing?.id &&
           item.module === kind &&
@@ -236,7 +267,7 @@ export default function ProductsPage() {
           <div className="mb-4 flex flex-wrap items-end gap-3">
             <label className="text-sm font-medium">
               Type
-              <select className={field} value={module} onChange={(e) => setModule(e.target.value)}>
+              <select className={field} value={module} onChange={(e) => { setPage(1); setModule(e.target.value); }}>
                 <option value="">All types</option>{enabledModules.map(m => <option key={m} value={m}>{m}</option>)}
               </select>
             </label>
@@ -245,19 +276,31 @@ export default function ProductsPage() {
               <input
                 className={field}
                 value={category}
-                onChange={(e) => setCategory(e.target.value)}
+                onChange={(e) => { setPage(1); setCategory(e.target.value); }}
                 placeholder="Filter category"
+              />
+            </label>
+            <label className="text-sm font-medium">
+              Search
+              <input
+                className={field}
+                type="search"
+                value={search}
+                onChange={(e) => { setPage(1); setSearch(e.target.value); }}
+                placeholder="Item name"
               />
             </label>
             <label className="mb-3 flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
                 checked={archived}
-                onChange={(e) => setArchived(e.target.checked)}
+                onChange={(e) => { setPage(1); setArchived(e.target.checked); }}
               />
               Archived items
             </label>
-            <span className="mb-3 ml-auto text-sm text-ink/55">{items.length} items</span>
+            <span className="mb-3 ml-auto text-sm text-ink/55">
+              {total} items · Page {page} of {Math.max(1, Math.ceil(total / catalogPageSize))}
+            </span>
           </div>
           {error && (
             <p role="alert" className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-800">
@@ -272,7 +315,9 @@ export default function ProductsPage() {
               <span>Price</span>
               <span>Stock / action</span>
             </div>
-            {items.map((item) => (
+            {loading ? (
+              <p className="p-8 text-center text-sm text-ink/55" role="status">Loading catalog…</p>
+            ) : items.map((item) => (
               <article
                 key={item.id}
                 className="grid gap-2 border-t border-ink/5 px-5 py-4 sm:grid-cols-[1.5fr_0.8fr_1fr_0.8fr_1fr] sm:items-center sm:gap-3"
@@ -308,12 +353,33 @@ export default function ProductsPage() {
                 </div>
               </article>
             ))}
-            {!items.length && (
+            {!loading && !items.length && (
               <p className="p-8 text-center text-sm text-ink/55">
                 No catalog items match these filters.
               </p>
             )}
           </div>
+          {!loading && total > catalogPageSize && (
+            <nav aria-label="Catalog pages" className="mt-4 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                className="min-h-11 rounded-xl border border-ink/15 px-4 py-2 text-sm disabled:opacity-50"
+                disabled={page <= 1}
+                onClick={() => setPage((current) => current - 1)}
+              >
+                Previous
+              </button>
+              <span className="text-sm text-ink/60">Page {page} of {Math.ceil(total / catalogPageSize)}</span>
+              <button
+                type="button"
+                className="min-h-11 rounded-xl border border-ink/15 px-4 py-2 text-sm disabled:opacity-50"
+                disabled={page >= Math.ceil(total / catalogPageSize)}
+                onClick={() => setPage((current) => current + 1)}
+              >
+                Next
+              </button>
+            </nav>
+          )}
         </section>
       </section>
     </main>

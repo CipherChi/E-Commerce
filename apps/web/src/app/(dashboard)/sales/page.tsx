@@ -4,8 +4,10 @@ import Link from 'next/link';
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest } from '@/lib/api';
 import { CustomerLookup } from '@/components/CustomerLookup';
+import { ProductLookup } from '@/components/ProductLookup';
+import type { CatalogOption } from '@/components/ProductLookup';
 import { formatMoney, multiplyMoney, subtractMoney, sumMoney } from '@/lib/money';
-type Item = { id: string; name: string; module: string; sellingPrice: string; normalRate: string; partyRate: string; monthlyPrice: string; isStockable: boolean; currentQuantity?: number | null };
+type Item = CatalogOption;
 type Customer = { id: string; name: string; phone: string };
 type StaffMember = { id: string; name: string };
 type Sale = {
@@ -30,6 +32,8 @@ type Sale = {
   movements?: { id: string; quantity: number; product: { name: string } }[];
 };
 type SalesPage = { data: Sale[]; total: number; page: number; pageSize: number };
+type CatalogPage = { data: Item[]; total: number; page: number; pageSize: number };
+type SaleLine = { productId: string; quantity: number; pricingOption: 'NORMAL' | 'PARTY'; product?: Item };
 const field = 'mt-2 w-full rounded-xl border border-ink/15 bg-white px-4 py-3';
 const money = (n: string | number) => formatMoney(String(n));
 const salesPageSize = 25;
@@ -47,7 +51,7 @@ export default function SalesPage() {
   const [method, setMethod] = useState('CASH');
   const [paymentStatus, setPaymentStatus] = useState('PAID');
   const [amountPaid, setAmountPaid] = useState('');
-  const [lines, setLines] = useState<{ productId: string; quantity: number; pricingOption: 'NORMAL' | 'PARTY' }[]>([]);
+  const [lines, setLines] = useState<SaleLine[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [filter, setFilter] = useState('');
@@ -74,10 +78,10 @@ export default function SalesPage() {
       params.set('page', String(historyPage));
       params.set('pageSize', String(salesPageSize));
       const [catalog, history] = await Promise.all([
-        apiRequest<Item[]>('/catalog'),
+        apiRequest<CatalogPage>('/catalog?page=1&pageSize=25'),
         apiRequest<SalesPage>(`/sales?${params}`),
       ]);
-      setItems(catalog);
+      setItems(catalog.data);
       setSales(history.data);
       setSalesTotal(history.total);
     } catch (e) {
@@ -94,15 +98,16 @@ export default function SalesPage() {
     return () => window.clearTimeout(timeout);
   }, [search]);
   useEffect(() => { void apiRequest<{role:string|null}>('/auth/me').then(me => { if(me.role==='OWNER') return apiRequest<Array<{user:StaffMember}>>('/businesses/staff').then(rows=>setStaff(rows.map(row=>row.user))); }).catch(()=>{}); }, []);
-  const priceFor = (line: { productId: string; pricingOption: 'NORMAL' | 'PARTY' }) => { const item = items.find(i => i.id === line.productId); return item?.module === 'LODGING' ? (line.pricingOption === 'PARTY' ? item.partyRate : item.normalRate) : item?.module === 'GYM' ? item.monthlyPrice : item?.sellingPrice ?? '0'; };
+  const itemFor = (line: SaleLine) => line.product ?? items.find((item) => item.id === line.productId);
+  const priceFor = (line: SaleLine) => { const item = itemFor(line); return item?.module === 'LODGING' ? (line.pricingOption === 'PARTY' ? item.partyRate : item.normalRate) : item?.module === 'GYM' ? item.monthlyPrice : item?.sellingPrice ?? '0'; };
   const total = useMemo(() => sumMoney(lines.map(line => multiplyMoney(priceFor(line), line.quantity))), [lines, items]);
   const historyPageCount = Math.max(1, Math.ceil(salesTotal / salesPageSize));
   const filteredSales = sales;
   const hasHistoryFilters = Boolean(filter || customerFilter || statusFilter || recordedBy || from || to || search);
   function addLine() {
     const available = items.find((i) => !lines.some((l) => l.productId === i.id));
-    if (available) setLines([...lines, { productId: available.id, quantity: 1, pricingOption: 'NORMAL' }]);
-    else setLines([...lines, { productId: items[0]?.id ?? '', quantity: 1, pricingOption: 'NORMAL' }]);
+    if (available) setLines([...lines, { productId: available.id, quantity: 1, pricingOption: 'NORMAL', product: available }]);
+    else setLines([...lines, { productId: items[0]?.id ?? '', quantity: 1, pricingOption: 'NORMAL', product: items[0] }]);
   }
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -198,27 +203,17 @@ export default function SalesPage() {
           <div className="mt-3 space-y-3">
             {lines.map((line, index) => (
               <div key={index} className="grid grid-cols-[1fr_82px_34px] items-end gap-2">
-                <label className="text-xs font-medium text-ink/60">
-                  Product or service
-                  <select
-                    value={line.productId}
-                    onChange={(e) =>
-                      setLines(
-                        lines.map((x, i) =>
-                          i === index ? { ...x, productId: e.target.value, pricingOption: 'NORMAL' } : x,
-                        ),
-                      )
-                    }
-                    className={field}
-                  >
-                    {items.map((i) => (
-                      <option key={i.id} value={i.id}>
-                        {i.name} · {money(i.sellingPrice)}{i.isStockable ? ` · ${i.currentQuantity ?? 0} in stock` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {items.find(i => i.id === line.productId)?.module === 'LODGING' && <label className="col-span-full text-xs font-medium text-ink/60">Rate<select value={line.pricingOption} onChange={e => setLines(lines.map((x,i) => i === index ? { ...x, pricingOption: e.target.value as 'NORMAL' | 'PARTY' } : x))} className={field}><option value="NORMAL">Normal rate: {money(items.find(i=>i.id===line.productId)?.normalRate ?? '0')}</option><option value="PARTY">Party rate: {money(items.find(i=>i.id===line.productId)?.partyRate ?? '0')}</option></select></label>}
+                <ProductLookup
+                  selected={itemFor(line) ?? null}
+                  onSelect={(product) =>
+                    setLines(lines.map((current, i) =>
+                      i === index
+                        ? { ...current, productId: product.id, product, pricingOption: 'NORMAL' }
+                        : current,
+                    ))
+                  }
+                />
+                {itemFor(line)?.module === 'LODGING' && <label className="col-span-full text-xs font-medium text-ink/60">Rate<select value={line.pricingOption} onChange={e => setLines(lines.map((x,i) => i === index ? { ...x, pricingOption: e.target.value as 'NORMAL' | 'PARTY' } : x))} className={field}><option value="NORMAL">Normal rate: {money(itemFor(line)?.normalRate ?? '0')}</option><option value="PARTY">Party rate: {money(itemFor(line)?.partyRate ?? '0')}</option></select></label>}
                 <label className="text-xs font-medium text-ink/60">
                   Qty
                   <input
