@@ -18,6 +18,9 @@ export class InventoryController {
   @Get('products') products(@Req() req: AuthReq) {
     return this.inventory.stockableProducts(req.user.businessId);
   }
+  @Get('summary') summary(@Req() req: AuthReq) {
+    return this.inventory.summary(req.user.businessId);
+  }
   @Get('low-stock') low(@Req() req: AuthReq) {
     return this.inventory.lowStock(req.user.businessId);
   }

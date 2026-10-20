@@ -18,10 +18,10 @@ export default function Dashboard() {
   const load = useCallback(async () => { try { const query = new URLSearchParams({ range }); if (range === 'custom') { if (from) query.set('from', from); if (to) query.set('to', to); } setData(await apiRequest<DashboardData>(`/dashboard/summary?${query}`)); setError(''); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to load dashboard'); } }, [range, from, to]);
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
-    void apiRequest<{role:string|null}>('/auth/me').then(me => { const isOwner=me.role==='OWNER';setOwner(isOwner);if(!isOwner)return;return Promise.all([apiRequest<{name:string}>('/businesses/profile'), apiRequest<Array<{module:string;isEnabled:boolean}>>('/businesses/modules'), apiRequest<unknown[]>('/properties'), apiRequest<Array<{id:string}> >('/catalog'), apiRequest<Array<{id:string}>>('/inventory/products')])
-      .then(async ([profile, modules, properties, products, stockables]) => {
+    void apiRequest<{role:string|null}>('/auth/me').then(me => { const isOwner=me.role==='OWNER';setOwner(isOwner);if(!isOwner)return;return Promise.all([apiRequest<{name:string}>('/businesses/profile'), apiRequest<Array<{module:string;isEnabled:boolean}>>('/businesses/modules'), apiRequest<unknown[]>('/properties'), apiRequest<Array<{id:string}> >('/catalog'), apiRequest<{stockableProductCount:number;productsWithStock:number}>('/inventory/summary')])
+      .then(async ([profile, modules, properties, products, inventory]) => {
         const staff = await apiRequest<Array<{user:{id:string}}>>('/businesses/staff');
-        setSetup({ profile: Boolean(profile.name), modules: modules.some(row=>row.isEnabled), properties: properties.length>0, products: products.length>0, stock: stockables.length===0 || (await Promise.all(stockables.map(row=>apiRequest<{quantity:number}>(`/inventory/${row.id}/current`)))).some(row=>row.quantity>0), staff: staff.length>0 });
+        setSetup({ profile: Boolean(profile.name), modules: modules.some(row=>row.isEnabled), properties: properties.length>0, products: products.length>0, stock: inventory.stockableProductCount===0 || inventory.productsWithStock>0, staff: staff.length>0 });
       })}).catch(()=>setSetup(null));
   }, []);
   const cards: Array<[string, string, string]> = data ? [

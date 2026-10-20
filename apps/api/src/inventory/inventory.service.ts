@@ -72,6 +72,23 @@ export class InventoryService {
     });
   }
 
+  async summary(businessId: string) {
+    const products = await this.stockableProducts(businessId);
+    const productIds = products.map((product) => product.id);
+    const totals = productIds.length
+      ? await this.prisma.stockMovement.groupBy({
+          by: ['productId'],
+          where: { businessId, productId: { in: productIds } },
+          _sum: { quantity: true },
+        })
+      : [];
+
+    return {
+      stockableProductCount: productIds.length,
+      productsWithStock: totals.filter((row) => (row._sum.quantity ?? 0) > 0).length,
+    };
+  }
+
   stockIn(businessId: string, userId: string, dto: StockMovementDto) {
     return this.record(
       businessId,
