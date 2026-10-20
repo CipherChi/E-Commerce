@@ -16,7 +16,8 @@ export class BusinessesService {
 
   async staff(businessId: string) {
     // Staff access is determined by the tenant-scoped BusinessMember.role.
-    return this.prisma.businessMember.findMany({ where: { businessId, role: 'STAFF' }, include: { user: { select: { id: true, name: true, email: true, isActive: true, createdAt: true } } }, orderBy: { createdAt: 'desc' } });
+    const memberships = await this.prisma.businessMember.findMany({ where: { businessId, role: 'STAFF' }, include: { user: { select: { id: true, name: true, email: true, createdAt: true } } }, orderBy: { createdAt: 'desc' } });
+    return memberships.map((membership) => ({ ...membership, user: { ...membership.user, isActive: membership.isActive } }));
   }
 
   async createStaff(businessId: string, dto: { name: string; email: string; password: string }) {
@@ -27,9 +28,25 @@ export class BusinessesService {
   }
 
   async setStaffActive(businessId: string, userId: string, isActive: boolean) {
-    const membership = await this.prisma.businessMember.findFirst({ where: { businessId, userId, role: 'STAFF' } });
-    if (!membership) throw new NotFoundException('Staff member not found');
-    return this.prisma.user.update({ where: { id: userId }, data: { isActive, tokenVersion: { increment: 1 } }, select: { id: true, name: true, email: true, isActive: true } });
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.businessMember.updateMany({
+        where: { businessId, userId, role: 'STAFF' },
+        data: { isActive },
+      });
+      if (!updated.count) throw new NotFoundException('Staff member not found');
+      if (!isActive) {
+        await tx.user.update({
+          where: { id: userId },
+          data: { refreshTokenHash: null, tokenVersion: { increment: 1 } },
+        });
+      }
+      const membership = await tx.businessMember.findFirst({
+        where: { businessId, userId, role: 'STAFF' },
+        include: { user: { select: { id: true, name: true, email: true, createdAt: true } } },
+      });
+      if (!membership) throw new NotFoundException('Staff member not found');
+      return { ...membership, user: { ...membership.user, isActive: membership.isActive } };
+    });
   }
 
   create(userId: string, dto: CreateBusinessDto) {

@@ -21,6 +21,7 @@ describe('SalesService Decimal rules', () => {
     await service.create('b1', 'u1', dto, 'key-1');
     expect(tx.sale.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ subtotal: new Prisma.Decimal('30.75'), amountPaid: new Prisma.Decimal('5.10'), items: { create: [expect.objectContaining({ unitPrice: new Prisma.Decimal('10.25'), lineSubtotal: new Prisma.Decimal('30.75') })] } }) }));
     expect(tx.sale.create.mock.calls[0][0].data).toEqual(expect.objectContaining({ receiptNumber: expect.stringMatching(/^RCT-\d{4}-000001$/), receiptToken: expect.any(String), idempotencyKey: 'key-1' }));
+    expect(Buffer.from(tx.sale.create.mock.calls[0][0].data.receiptToken, 'base64url')).toHaveLength(32);
     expect(tx.receiptSequence.upsert).toHaveBeenCalledWith(expect.objectContaining({ where: { businessId_year: { businessId: 'b1', year: expect.any(Number) } } }));
   });
   it('rejects zero or full amount as a partial tender before writing a sale', async () => {

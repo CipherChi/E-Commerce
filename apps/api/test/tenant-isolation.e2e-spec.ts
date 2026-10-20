@@ -380,6 +380,68 @@ describe('Cross-business isolation (real Postgres)', () => {
     expect(privateProduct).not.toHaveProperty('costPrice');
   });
 
+  it('deactivates one staff membership without disabling their other business', async () => {
+    const owner = await prisma.user.findUniqueOrThrow({
+      where: { id: (await prisma.businessMember.findFirstOrThrow({ where: { businessId: businessAId } })).userId },
+    });
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const email = `multi-business-staff-${suffix}@example.test`;
+    const password = 'tenant-test-password-123';
+    const staff = await prisma.user.create({
+      data: {
+        email,
+        passwordHash: owner.passwordHash,
+        name: 'Two business staff',
+        role: Role.STAFF,
+        memberships: {
+          create: [
+            { businessId: businessAId, role: 'STAFF', createdAt: new Date('2025-01-01T00:00:00Z') },
+            { businessId: resources.businesses[0].id, role: 'STAFF', createdAt: new Date('2025-01-02T00:00:00Z') },
+          ],
+        },
+      },
+    });
+    userIds.push(staff.id);
+    const login = await request(app.getHttpServer()).post('/auth/login').send({ email, password }).expect(201);
+    const originalToken = `Bearer ${login.body.accessToken}`;
+    await request(app.getHttpServer())
+      .patch(`/businesses/staff/${staff.id}`)
+      .set('Authorization', tokenA)
+      .send({ isActive: false })
+      .expect(200);
+
+    await request(app.getHttpServer()).get('/auth/me').set('Authorization', originalToken).expect(401);
+    await request(app.getHttpServer())
+      .post('/auth/refresh')
+      .send({ refreshToken: login.body.refreshToken })
+      .expect(401);
+
+    const relogin = await request(app.getHttpServer()).post('/auth/login').send({ email, password }).expect(201);
+    const businessBToken = `Bearer ${relogin.body.accessToken}`;
+    await request(app.getHttpServer()).get('/businesses/profile').set('Authorization', businessBToken).expect(200);
+    await request(app.getHttpServer())
+      .get(`/customers/${resources.customers[0].id}`)
+      .set('Authorization', businessBToken)
+      .expect(200);
+    const customerA = await prisma.customer.create({
+      data: { businessId: businessAId, name: 'Business A customer', phone: `+234802${Date.now()}` },
+    });
+    await request(app.getHttpServer())
+      .get(`/customers/${customerA.id}`)
+      .set('Authorization', businessBToken)
+      .expect(404);
+
+    const memberships = await prisma.businessMember.findMany({
+      where: { userId: staff.id },
+      orderBy: { businessId: 'asc' },
+      select: { businessId: true, isActive: true },
+    });
+    expect(memberships).toEqual([
+      { businessId: businessAId, isActive: false },
+      { businessId: resources.businesses[0].id, isActive: true },
+    ].sort((a, b) => a.businessId.localeCompare(b.businessId)));
+  });
+
   it('rejects generic writes for payment and invoice records and exposes no generic money routes', async () => {
     const paymentId = resources.payments[0].id;
     const invoiceId = resources.invoices[0].id;
@@ -1060,6 +1122,10 @@ describe('Cross-business isolation (real Postgres)', () => {
   it('hides invoice details and rejects payment writes across businesses', async () => {
     const invoice = resources.invoices[0];
     await request(app.getHttpServer()).get(invoice.path).set('Authorization', tokenA).expect(404);
+    await request(app.getHttpServer())
+      .post(`/invoices/${invoice.id}/void`)
+      .set('Authorization', tokenA)
+      .expect(404);
     await request(app.getHttpServer())
       .get(`${invoice.path}/payments`)
       .set('Authorization', tokenA)

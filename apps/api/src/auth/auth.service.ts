@@ -2,13 +2,14 @@ import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/co
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 
 @Injectable()
 export class AuthService {
+  private readonly dummyPasswordHash = argon2.hash('invalid-account-password-placeholder');
   constructor(
     private prisma: PrismaService,
     private jwt: JwtService,
@@ -25,11 +26,61 @@ export class AuthService {
     return this.issueTokens(user);
   }
 
-  async login(dto: LoginDto) {
-    const user = await this.prisma.user.findUnique({ where: { email: dto.email.toLowerCase() } });
-    if (!user || !user.isActive || !(await argon2.verify(user.passwordHash, dto.password)))
+  async login(dto: LoginDto, clientIp = 'unknown') {
+    const normalizedEmail = dto.email.toLowerCase();
+    const user = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
+    const now = Date.now();
+    const key = createHash('sha256').update(`login-ip\0${user?.id ?? normalizedEmail}\0${clientIp}`).digest('hex');
+    // Email identity provides a second counter shared across client IPs; only its hash is stored.
+    const accountKey = createHash('sha256').update(`login-account\0${normalizedEmail}`).digest('hex');
+    const [attempt, accountAttempt] = await Promise.all([
+      this.prisma.loginAttempt.findUnique({ where: { key } }),
+      this.prisma.loginAttempt.findUnique({ where: { key: accountKey } }),
+    ]);
+    const locked = [attempt, accountAttempt].some(
+      (entry) => Boolean(entry?.lockedUntil && entry.lockedUntil.getTime() > now),
+    );
+    const passwordMatches = await argon2.verify(
+      user && !locked ? user.passwordHash : await this.dummyPasswordHash,
+      dto.password,
+    );
+    if (!user || !user.isActive || locked || !passwordMatches) {
+      if ((!user || user.isActive) && !locked) {
+        await Promise.all([
+          this.recordLoginFailure(key, 5, 900_000),
+          // Across-IP backoff starts at 10 failures and never exceeds one minute.
+          this.recordLoginFailure(accountKey, 10, 60_000),
+        ]);
+      }
       throw new UnauthorizedException('Invalid email or password');
+    }
+    await this.prisma.loginAttempt.deleteMany({ where: { key: { in: [key, accountKey] } } });
     return this.issueTokens(user);
+  }
+
+  private recordLoginFailure(key: string, threshold: number, maxLockMs: number) {
+    return this.prisma.$executeRaw`
+          INSERT INTO "LoginAttempt" ("key", "failedAttempts", "firstFailureAt", "lockedUntil", "updatedAt")
+          VALUES (${key}, 1, NOW(), NULL, NOW())
+          ON CONFLICT ("key") DO UPDATE SET
+            "failedAttempts" = CASE
+              WHEN "LoginAttempt"."firstFailureAt" < NOW() - INTERVAL '15 minutes' THEN 1
+              ELSE "LoginAttempt"."failedAttempts" + 1
+            END,
+            "firstFailureAt" = CASE
+              WHEN "LoginAttempt"."firstFailureAt" < NOW() - INTERVAL '15 minutes' THEN NOW()
+              ELSE "LoginAttempt"."firstFailureAt"
+            END,
+            "lockedUntil" = CASE
+              WHEN "LoginAttempt"."firstFailureAt" < NOW() - INTERVAL '15 minutes' THEN NULL
+              WHEN "LoginAttempt"."failedAttempts" + 1 < ${threshold} THEN NULL
+              ELSE NOW() + (
+                LEAST(${maxLockMs}::double precision, 1000 * POWER(2, LEAST("LoginAttempt"."failedAttempts" + 1 - ${threshold}, 12)))
+                * INTERVAL '1 millisecond'
+              )
+            END,
+            "updatedAt" = NOW()
+        `;
   }
 
   async refresh(userId: string, token: string) {
@@ -43,7 +94,12 @@ export class AuthService {
     }
     if (payload.sub !== userId) throw new UnauthorizedException('Invalid refresh token');
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user?.refreshTokenHash || !(await argon2.verify(user.refreshTokenHash, token)))
+    if (
+      !user?.isActive ||
+      (payload as { tokenVersion?: number }).tokenVersion !== (user.tokenVersion ?? 0) ||
+      !user.refreshTokenHash ||
+      !(await argon2.verify(user.refreshTokenHash, token))
+    )
       throw new UnauthorizedException('Invalid refresh token');
     return this.issueTokens(user);
   }
@@ -58,6 +114,7 @@ export class AuthService {
         name: true,
         propertyId: true,
         memberships: {
+          where: { isActive: true },
           orderBy: { createdAt: 'desc' },
           take: 1,
           select: { businessId: true, role: true, business: { select: { name: true } } },

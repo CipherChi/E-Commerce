@@ -9,9 +9,17 @@ import { JwtStrategy } from './jwt.strategy';
 import { RolesGuard } from './roles.guard';
 import { BusinessContextGuard } from './business-context.guard';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { throttlingConfig } from './throttling-config';
 
 @Module({
-  imports: [PassportModule, JwtModule.register({}), ThrottlerModule.forRoot([{ ttl: 60_000, limit: 5 }])],
+  imports: [
+    PassportModule,
+    JwtModule.register({}),
+    ThrottlerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => throttlingConfig(config.get<string>('REDIS_URL')),
+    }),
+  ],
   controllers: [AuthController],
   providers: [
     AuthService,
@@ -21,6 +29,6 @@ import { ThrottlerModule } from '@nestjs/throttler';
     BusinessContextGuard,
     ConfigService,
   ],
-  exports: [AuthService, JwtAuthGuard, RolesGuard, BusinessContextGuard],
+  exports: [AuthService, JwtAuthGuard, RolesGuard, BusinessContextGuard, ThrottlerModule],
 })
 export class AuthModule {}

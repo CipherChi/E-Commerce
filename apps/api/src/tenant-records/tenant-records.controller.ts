@@ -4,6 +4,8 @@ import { Request } from 'express';
 import { BusinessContextGuard } from '../auth/business-context.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantRecordsService } from './tenant-records.service';
+import { Roles } from '../auth/roles.decorator';
+import { RolesGuard } from '../auth/roles.guard';
 
 @ApiTags('tenant records')
 @ApiBearerAuth()
@@ -13,6 +15,8 @@ export class TenantRecordsController {
   constructor(private readonly records: TenantRecordsService) {}
 
   @Get('payments/:id')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
   getPayment(@Req() req: Request & { user: { businessId: string } }, @Param('id') id: string) {
     return this.records.get('payment', req.user.businessId, id);
   }

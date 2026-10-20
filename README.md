@@ -20,6 +20,10 @@ Sign in with the seeded administrator account, or register an account and create
 
 Local development and tenant-isolation tests use separate databases on the same `infra` PostgreSQL server at `localhost:5432`: `hotel_manager` for the app and `hotel_manager_test` for tests. CI creates its own ephemeral `app_test` database; no extra local CI database container is needed.
 
+Configure `SWAGGER_USERNAME` and `SWAGGER_PASSWORD` to use the API docs; `/api/docs` and its OpenAPI documents require HTTP Basic authentication and return unavailable when credentials are unset. Set `REDIS_URL` to use shared Redis-backed API throttling across instances; when unset, throttling uses in-memory storage for local development. `TRUST_PROXY` defaults to `false`; set it to a trusted proxy hop count (for example, `1`) so throttling can use the forwarded client IP. Boolean `true` is ignored to avoid trusting arbitrary forwarded headers.
+
+Login uses uniform credential errors and per-account progressive lockout beginning after five consecutive failures. A successful login resets the failure count. The account lockout state is persisted in PostgreSQL.
+
 The tenant-isolation end-to-end suite uses the real `hotel_manager_test` database. Set `TENANT_TEST_DATABASE_URL` to that database in PowerShell, then run:
 
 ```powershell

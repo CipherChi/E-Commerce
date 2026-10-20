@@ -152,12 +152,21 @@ model BusinessMember {
   businessId String
   userId     String
   role       String   @default("OWNER")
+  isActive   Boolean  @default(true)
   createdAt  DateTime @default(now())
   business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([businessId, userId])
   @@index([userId, createdAt])
+}
+
+model LoginAttempt {
+  key              String   @id
+  failedAttempts   Int      @default(0)
+  firstFailureAt   DateTime @default(now())
+  lockedUntil      DateTime?
+  updatedAt        DateTime @updatedAt
 }
 
 model Property {

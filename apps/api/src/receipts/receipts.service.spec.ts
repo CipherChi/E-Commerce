@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { formatReceiptMoney } from '@hotel/shared-types/src/money.js';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReceiptsService } from './receipts.service';
+import { NotFoundException } from '@nestjs/common';
 
 describe('ReceiptsService', () => {
   const record = {
@@ -39,5 +40,12 @@ describe('ReceiptsService', () => {
     expect(receipt.publicUrl).toContain('/public/receipt/unguessable-token');
     const pdf = await service.pdf('unguessable-token');
     expect(pdf.buffer.subarray(0, 4).toString()).toBe('%PDF');
+  });
+
+  it('returns 404 for unknown public receipt tokens', async () => {
+    const { service, prisma } = setup();
+    (prisma.sale.findFirst as jest.Mock).mockResolvedValueOnce(null);
+    await expect(service.publicReceipt('unknown')).rejects.toBeInstanceOf(NotFoundException);
+    expect(prisma.sale.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { receiptToken: 'unknown', status: 'COMPLETED' } }));
   });
 });

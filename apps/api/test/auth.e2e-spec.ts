@@ -8,6 +8,7 @@ import { PrismaService } from '../src/prisma/prisma.service';
 describe('Authentication endpoints', () => {
   let app: INestApplication;
   const users: any[] = [];
+  const loginAttempts = new Map<string, { failedAttempts: number; firstFailureAt: number; lockedUntil: Date | null }>();
   const prisma = {
     user: {
       findUnique: jest.fn(
@@ -21,6 +22,8 @@ describe('Authentication endpoints', () => {
           isActive: true,
           propertyId: null,
           tokenVersion: 0,
+          failedLoginAttempts: 0,
+          loginLockedUntil: null,
           refreshTokenHash: null,
           ...data,
         };
@@ -36,6 +39,25 @@ describe('Authentication endpoints', () => {
         return user;
       }),
     },
+    loginAttempt: {
+      findUnique: jest.fn(({ where }: any) => loginAttempts.get(where.key) ?? null),
+      deleteMany: jest.fn(({ where }: any) => {
+        const keys = Array.isArray(where.key?.in) ? where.key.in : [where.key];
+        return { count: keys.reduce((count: number, key: string) => count + Number(loginAttempts.delete(key)), 0) };
+      }),
+    },
+    $executeRaw: jest.fn((_strings: TemplateStringsArray, key: string, threshold: number, maxLockMs: number) => {
+      const now = Date.now();
+      const prior = loginAttempts.get(key);
+      const withinWindow = prior && now - prior.firstFailureAt < 15 * 60_000;
+      const failedAttempts = withinWindow ? prior.failedAttempts + 1 : 1;
+      const firstFailureAt = withinWindow ? prior.firstFailureAt : now;
+      const lockMs = failedAttempts < threshold
+        ? 0
+        : Math.min(maxLockMs, 1_000 * 2 ** Math.min(failedAttempts - threshold, 12));
+      loginAttempts.set(key, { failedAttempts, firstFailureAt, lockedUntil: lockMs ? new Date(now + lockMs) : null });
+      return 1;
+    }),
     businessMember: { findFirst: jest.fn().mockResolvedValue(null) },
     $connect: jest.fn(),
     $disconnect: jest.fn(),
@@ -98,7 +120,8 @@ describe('Authentication endpoints', () => {
     expect(me.body).toMatchObject({
       email: credentials.email,
       name: credentials.name,
-      role: 'STAFF',
+      role: null,
+      businessId: null,
     });
     await request(app.getHttpServer())
       .post('/auth/logout')

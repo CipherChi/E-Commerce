@@ -38,4 +38,23 @@ describe('PaymentsService', () => {
     expect(result.status).toBe('VOID');
     expect(result.balance.toString()).toBe('0');
   });
+
+  it('rejects voiding when an invoice already has a payment', async () => {
+    const { service, tx } = setup();
+    tx.invoice.findFirst.mockResolvedValueOnce({
+      id: 'invoice-a', businessId: 'business-a', bookingId: 'booking-a',
+      totalAmount: new Prisma.Decimal('30'), status: 'UNPAID',
+      booking: { payments: [{ id: 'payment-a', amount: new Prisma.Decimal('5') }] },
+    });
+    await expect(service.voidInvoice('business-a', 'invoice-a')).rejects.toThrow('with payments cannot be voided');
+    expect(tx.invoice.update).not.toHaveBeenCalled();
+  });
+
+  it('returns 404 for a cross-tenant invoice before attempting to void it', async () => {
+    const { service, tx } = setup();
+    tx.$queryRaw.mockResolvedValueOnce([]);
+    await expect(service.voidInvoice('business-a', 'invoice-b')).rejects.toMatchObject({ status: 404 });
+    expect(tx.invoice.findFirst).not.toHaveBeenCalled();
+    expect(tx.invoice.update).not.toHaveBeenCalled();
+  });
 });

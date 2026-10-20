@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantRecordsService } from './tenant-records.service';
 
@@ -32,4 +32,11 @@ describe('TenantRecordsService generic writes', () => {
       expect(delegate.deleteMany).not.toHaveBeenCalled();
     },
   );
+
+  it('returns 404 for a payment identifier outside the current business', async () => {
+    const { service, delegate } = makeService();
+    delegate.findFirst.mockResolvedValueOnce(null);
+    await expect(service.get('payment', 'business-2', 'record-1')).rejects.toBeInstanceOf(NotFoundException);
+    expect(delegate.findFirst).toHaveBeenCalledWith({ where: { id: 'record-1', businessId: 'business-2' } });
+  });
 });
