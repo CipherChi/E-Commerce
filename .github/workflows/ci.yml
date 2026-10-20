@@ -189,8 +189,6 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: pnpm audit (high and above, production dependencies)
-        # TEMPORARY: keep CI unblocked while the required major upgrades are reviewed.
-        continue-on-error: true
         run: pnpm audit --prod --audit-level high
       - name: Dependency review (PRs only)
         if: github.event_name == 'pull_request'

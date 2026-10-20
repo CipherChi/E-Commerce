@@ -7,10 +7,12 @@ import { HttpLoggingInterceptor } from './common/http-logging.interceptor';
 import { AppModule } from './app.module';
 import { swaggerBasicAuth } from './common/swagger-basic-auth';
 import { trustProxySetting } from './config/trust-proxy';
+import { requestIdMiddleware } from './common/request-id.middleware';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.getHttpAdapter().getInstance().set('trust proxy', trustProxySetting(process.env.TRUST_PROXY));
+  app.use(requestIdMiddleware);
   app.enableCors({ origin: process.env.WEB_ORIGIN ?? 'http://localhost:3000' });
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }),

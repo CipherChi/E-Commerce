@@ -5,12 +5,34 @@ import { finalize, Observable } from 'rxjs';
 export class HttpLoggingInterceptor implements NestInterceptor {
   private readonly logger = new Logger(HttpLoggingInterceptor.name);
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
-    const req = context.switchToHttp().getRequest<{ method: string; originalUrl: string }>();
+    const http = context.switchToHttp();
+    const req = http.getRequest<{
+      method: string;
+      path: string;
+      baseUrl?: string;
+      route?: { path?: string | RegExp };
+      requestId?: string;
+    }>();
+    const response = http.getResponse<{ statusCode: number }>();
     const start = Date.now();
     return next
       .handle()
       .pipe(
-        finalize(() => this.logger.log(`${req.method} ${req.originalUrl} ${Date.now() - start}ms`)),
+        finalize(() =>
+          this.logger.log(
+            JSON.stringify({
+              event: 'http_request',
+              requestId: req.requestId ?? null,
+              method: req.method,
+              path:
+                typeof req.route?.path === 'string'
+                  ? `${req.baseUrl ?? ''}${req.route.path}`
+                  : 'unmatched',
+              statusCode: response.statusCode,
+              durationMs: Date.now() - start,
+            }),
+          ),
+        ),
       );
   }
 }
