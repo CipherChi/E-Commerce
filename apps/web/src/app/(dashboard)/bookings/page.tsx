@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiRequest } from '@/lib/api';
+import { CustomerLookup } from '@/components/CustomerLookup';
 import { formatMoney } from '@/lib/money';
 
 type Property = { id: string; name: string };
@@ -29,7 +30,7 @@ export default function BookingsPage() {
   const router = useRouter();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customerId, setCustomerId] = useState('');
   const [rooms, setRooms] = useState<Room[]>([]);
   const [propertyId, setPropertyId] = useState('');
   const [roomId, setRoomId] = useState('');
@@ -53,7 +54,6 @@ export default function BookingsPage() {
   useEffect(() => {
     void Promise.all([
       apiRequest<Property[]>('/properties').then(setProperties),
-      apiRequest<Customer[]>('/customers').then(setCustomers),
       loadBookings(),
     ]).catch((cause: unknown) =>
       setError(cause instanceof Error ? cause.message : 'Unable to load booking data'),
@@ -98,9 +98,13 @@ export default function BookingsPage() {
 
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    if (!form.get('customerId')) {
+      setError('Choose a customer from the search results.');
+      return;
+    }
     setSaving(true);
     setError('');
-    const form = new FormData(event.currentTarget);
     try {
       const booking = await apiRequest<Booking>('/bookings', {
         method: 'POST',
@@ -141,21 +145,13 @@ export default function BookingsPage() {
       <section className="mt-9 grid gap-8 lg:grid-cols-[0.8fr_1.2fr]">
         <form className="h-fit rounded-3xl border border-ink/10 bg-white p-6" onSubmit={create}>
           <h2 className="text-xl font-semibold">Create a booking</h2>
-          <label className="mt-5 block text-sm font-medium">
-            Customer
-            <select
-              className="mt-2 w-full rounded-xl border border-ink/15 bg-white px-4 py-3"
-              name="customerId"
-              required
-            >
-              <option value="">Select customer</option>
-              {customers.map((customer) => (
-                <option key={customer.id} value={customer.id}>
-                  {customer.name} · {customer.phone}
-                </option>
-              ))}
-            </select>
-          </label>
+          <CustomerLookup
+            label="Customer"
+            name="customerId"
+            value={customerId}
+            onChange={setCustomerId}
+            required
+          />
           <label className="mt-4 block text-sm font-medium">
             Property
             <select

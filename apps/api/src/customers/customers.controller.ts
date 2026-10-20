@@ -18,6 +18,7 @@ import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
+import { ListCustomersDto } from './dto/list-customers.dto';
 import { CustomersService } from './customers.service';
 
 @ApiTags('customers')
@@ -28,7 +29,7 @@ export class CustomersController {
   constructor(private readonly customers: CustomersService) {}
 
   @Get()
-  list(@Req() req: Request & { user: { businessId: string } }, @Query('q') query?: string) {
+  list(@Req() req: Request & { user: { businessId: string } }, @Query() query: ListCustomersDto) {
     return this.customers.list(req.user.businessId, query);
   }
   @Get(':id')

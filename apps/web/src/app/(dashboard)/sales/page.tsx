@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest } from '@/lib/api';
+import { CustomerLookup } from '@/components/CustomerLookup';
 import { formatMoney, multiplyMoney, subtractMoney, sumMoney } from '@/lib/money';
 type Item = { id: string; name: string; module: string; sellingPrice: string; normalRate: string; partyRate: string; monthlyPrice: string; isStockable: boolean; currentQuantity?: number | null };
 type Customer = { id: string; name: string; phone: string };
@@ -35,7 +36,6 @@ const salesPageSize = 25;
 export default function SalesPage() {
   const idempotencyKey = useRef<string | null>(null);
   const [items, setItems] = useState<Item[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [salesTotal, setSalesTotal] = useState(0);
   const [historyPage, setHistoryPage] = useState(1);
@@ -73,13 +73,11 @@ export default function SalesPage() {
       if (searchTerm) params.set('q', searchTerm);
       params.set('page', String(historyPage));
       params.set('pageSize', String(salesPageSize));
-      const [catalog, guests, history] = await Promise.all([
+      const [catalog, history] = await Promise.all([
         apiRequest<Item[]>('/catalog'),
-        apiRequest<Customer[]>('/customers'),
         apiRequest<SalesPage>(`/sales?${params}`),
       ]);
       setItems(catalog);
-      setCustomers(guests);
       setSales(history.data);
       setSalesTotal(history.total);
     } catch (e) {
@@ -166,21 +164,15 @@ export default function SalesPage() {
       <section className="mt-8 grid gap-8 lg:grid-cols-[430px_1fr]">
         <form onSubmit={submit} className="h-fit rounded-3xl border border-ink/10 bg-white p-6">
           <h2 className="text-xl font-semibold">New sale</h2>
-          <label className="mt-5 block text-sm font-medium">
-            Customer
-            <select
+          <div className="mt-5">
+            <CustomerLookup
+              label="Customer (optional)"
+              name="customerId"
               value={customerId}
-              onChange={(e) => setCustomerId(e.target.value)}
-              className={field}
-            >
-              <option value="">Walk-in / guest</option>
-              {customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name} · {c.phone}
-                </option>
-              ))}
-            </select>
-          </label>
+              onChange={setCustomerId}
+            />
+            {!customerId && <p className="mt-1 text-xs text-ink/50">Leave blank for a walk-in sale.</p>}
+          </div>
           {!customerId && (
             <label className="mt-4 block text-sm font-medium">
               Guest name
@@ -324,21 +316,12 @@ export default function SalesPage() {
                   placeholder="Guest name"
                 />
               </label>
-              <label className="text-xs font-medium">
-                Customer
-                <select
-                  value={customerFilter}
-                  onChange={(e) => { setHistoryPage(1); setCustomerFilter(e.target.value); }}
-                  className={field}
-                >
-                  <option value="">All customers</option>
-                  {customers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <CustomerLookup
+                label="Customer filter"
+                value={customerFilter}
+                onChange={(id) => { setHistoryPage(1); setCustomerFilter(id); }}
+                placeholder="Search customers"
+              />
               <label className="text-xs font-medium">
                 Payment
                 <select

@@ -9,24 +9,36 @@ import { deriveInvoiceFinancials } from '../finance/invoice-financials';
 export class CustomersService {
   constructor(private prisma: PrismaService) {}
 
-  list(businessId: string, query?: string) {
-    const search = query?.trim();
-    return this.prisma.customer.findMany({
-      where: {
-        businessId,
-        archivedAt: null,
-        ...(search
-          ? {
-              OR: [
-                { name: { contains: search, mode: 'insensitive' } },
-                { phone: { contains: search } },
-                { email: { contains: search, mode: 'insensitive' } },
-              ],
-            }
-          : {}),
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+  async list(
+    businessId: string,
+    query: { q?: string; page?: number; pageSize?: number } = {},
+  ) {
+    const search = query.q?.trim();
+    const where: Prisma.CustomerWhereInput = {
+      businessId,
+      archivedAt: null,
+      ...(search
+        ? {
+            OR: [
+              { name: { contains: search, mode: 'insensitive' } },
+              { phone: { contains: search } },
+              { email: { contains: search, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+    };
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 25;
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.customer.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.customer.count({ where }),
+    ]);
+    return { data, total, page, pageSize };
   }
 
   create(businessId: string, dto: CreateCustomerDto) {

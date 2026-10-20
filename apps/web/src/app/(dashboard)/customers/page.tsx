@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { apiRequest } from '@/lib/api';
 
 type Customer = {
@@ -13,31 +13,43 @@ type Customer = {
   idNumber?: string | null;
   notes?: string | null;
 };
+type CustomerPage = { data: Customer[]; total: number; page: number; pageSize: number };
+const customerPageSize = 25;
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const requestVersion = useRef(0);
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
+  const [loadError, setLoadError] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const load = useCallback(async (search: string) => {
+  const load = useCallback(async (search: string, pageNumber: number) => {
+    const version = ++requestVersion.current;
+    setLoading(true);
+    setLoadError('');
     try {
-      setCustomers(
-        await apiRequest<Customer[]>(
-          `/customers${search ? `?q=${encodeURIComponent(search)}` : ''}`,
-        ),
-      );
+      const params = new URLSearchParams({ page: String(pageNumber), pageSize: String(customerPageSize) });
+      if (search.trim()) params.set('q', search.trim());
+      const result = await apiRequest<CustomerPage>(`/customers?${params}`);
+      if (version !== requestVersion.current) return;
+      setCustomers(result.data);
+      setTotal(result.total);
       setError('');
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to load customers');
+      if (version === requestVersion.current) {
+        setLoadError(cause instanceof Error ? cause.message : 'Unable to load customers');
+      }
     } finally {
-      setLoading(false);
+      if (version === requestVersion.current) setLoading(false);
     }
   }, []);
   useEffect(() => {
-    const timer = window.setTimeout(() => void load(query), 250);
+    const timer = window.setTimeout(() => void load(query, page), 250);
     return () => window.clearTimeout(timer);
-  }, [load, query]);
+  }, [load, query, page]);
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formElement = event.currentTarget;
@@ -58,7 +70,8 @@ export default function CustomersPage() {
       });
       formElement.reset();
       setQuery('');
-      await load('');
+      setPage(1);
+      await load('', 1);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to create customer');
     } finally {
@@ -152,7 +165,7 @@ export default function CustomersPage() {
             <div>
               <h2 className="text-xl font-semibold">Customer list</h2>
               <p className="mt-1 text-sm text-ink/60">
-                {customers.length} {customers.length === 1 ? 'customer' : 'customers'}
+                {total} {total === 1 ? 'customer' : 'customers'} · Page {page} of {Math.max(1, Math.ceil(total / customerPageSize))}
               </p>
             </div>
             <label className="text-sm font-medium">
@@ -160,7 +173,7 @@ export default function CustomersPage() {
               <input
                 className="mt-2 w-full min-w-64 rounded-xl border border-ink/15 px-4 py-3"
                 value={query}
-                onChange={(event) => setQuery(event.target.value)}
+                onChange={(event) => { setPage(1); setQuery(event.target.value); }}
                 placeholder="Name or phone number"
                 type="search"
               />
@@ -168,6 +181,13 @@ export default function CustomersPage() {
           </div>
           {loading ? (
             <p className="text-sm text-ink/60">Loading customers…</p>
+          ) : loadError ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-ink/10 bg-white p-6 text-sm" role="alert">
+              <span>Unable to load customers: {loadError}</span>
+              <button type="button" className="font-semibold text-accent underline" onClick={() => void load(query, page)}>
+                Retry
+              </button>
+            </div>
           ) : customers.length === 0 ? (
             <div className="rounded-3xl border border-dashed border-ink/20 p-8 text-sm text-ink/60">
               {query ? 'No customers match this search.' : 'No customers registered yet.'}
@@ -207,6 +227,27 @@ export default function CustomersPage() {
                 </article>
               ))}
             </div>
+          )}
+          {!loading && !loadError && total > customerPageSize && (
+            <nav aria-label="Customer pages" className="mt-4 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                className="min-h-11 rounded-xl border border-ink/15 px-4 py-2 text-sm disabled:opacity-50"
+                disabled={loading || page <= 1}
+                onClick={() => setPage((current) => current - 1)}
+              >
+                Previous
+              </button>
+              <span className="text-sm text-ink/60">Page {page} of {Math.max(1, Math.ceil(total / customerPageSize))}</span>
+              <button
+                type="button"
+                className="min-h-11 rounded-xl border border-ink/15 px-4 py-2 text-sm disabled:opacity-50"
+                disabled={loading || page >= Math.ceil(total / customerPageSize)}
+                onClick={() => setPage((current) => current + 1)}
+              >
+                Next
+              </button>
+            </nav>
           )}
           {error && (
             <p className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
