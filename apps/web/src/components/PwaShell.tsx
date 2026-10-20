@@ -111,11 +111,11 @@ export function PwaShell() {
       {mobileLinks.length > 0 && (
         <nav
           aria-label="Primary"
-          className="fixed inset-x-0 bottom-0 z-30 grid border-t border-ink/10 bg-white/95 pb-[env(safe-area-inset-bottom)] text-center text-[10px] sm:hidden"
+          className="fixed inset-x-0 bottom-0 z-30 grid border-t border-ink/10 bg-white/95 pb-[env(safe-area-inset-bottom)] text-center text-xs sm:hidden"
           style={{ gridTemplateColumns: `repeat(${mobileLinks.length}, minmax(0, 1fr))` }}
         >
           {mobileLinks.map(([href, label]) => (
-            <Link key={href} href={href} className="px-1 py-3 text-ink/75">
+            <Link key={href} href={href} className="flex min-h-11 items-center justify-center px-1 py-3 text-ink/75">
               {label}
             </Link>
           ))}

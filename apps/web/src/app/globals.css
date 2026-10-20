@@ -117,6 +117,9 @@ button:disabled, [aria-disabled='true'] { cursor: not-allowed; opacity: .55; }
   .dashboard-surface { padding: .5rem; }
   .dashboard-content { min-height: calc(100dvh - 1rem); }
 }
+@media (max-width: 639px) {
+  .dashboard-content { padding-bottom: calc(44px + env(safe-area-inset-bottom, 0px)); }
+}
 @media (prefers-reduced-motion: reduce) {
   .hero-video { display: none; }
   .pill, button, a, .button, .nav-link, .card-link { transition: none; }
