@@ -35,6 +35,8 @@ export default function SalesPage() {
   const [items, setItems] = useState<Item[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
+  const [salesLoading, setSalesLoading] = useState(true);
+  const [salesLoadError, setSalesLoadError] = useState('');
   const [selected, setSelected] = useState<Sale | null>(null);
   const [customerId, setCustomerId] = useState('');
   const [guest, setGuest] = useState('');
@@ -53,6 +55,8 @@ export default function SalesPage() {
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [recordedBy, setRecordedBy] = useState('');
   const load = useCallback(async () => {
+    setSalesLoading(true);
+    setSalesLoadError('');
     try {
       const params = new URLSearchParams();
       if (filter) params.set('paymentMethod', filter);
@@ -69,9 +73,10 @@ export default function SalesPage() {
       setItems(catalog);
       setCustomers(guests);
       setSales(history);
-      setError('');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unable to load sales');
+      setSalesLoadError(e instanceof Error ? e.message : 'Unable to load sales history');
+    } finally {
+      setSalesLoading(false);
     }
   }, [filter, customerFilter, statusFilter, from, to, recordedBy]);
   useEffect(() => {
@@ -80,6 +85,12 @@ export default function SalesPage() {
   useEffect(() => { void apiRequest<{role:string|null}>('/auth/me').then(me => { if(me.role==='OWNER') return apiRequest<Array<{user:StaffMember}>>('/businesses/staff').then(rows=>setStaff(rows.map(row=>row.user))); }).catch(()=>{}); }, []);
   const priceFor = (line: { productId: string; pricingOption: 'NORMAL' | 'PARTY' }) => { const item = items.find(i => i.id === line.productId); return item?.module === 'LODGING' ? (line.pricingOption === 'PARTY' ? item.partyRate : item.normalRate) : item?.module === 'GYM' ? item.monthlyPrice : item?.sellingPrice ?? '0'; };
   const total = useMemo(() => sumMoney(lines.map(line => multiplyMoney(priceFor(line), line.quantity))), [lines, items]);
+  const filteredSales = sales.filter((sale) =>
+    (sale.customer?.name ?? sale.guestName ?? 'Walk-in')
+      .toLowerCase()
+      .includes(search.toLowerCase()),
+  );
+  const hasHistoryFilters = Boolean(filter || customerFilter || statusFilter || recordedBy || from || to || search);
   function addLine() {
     const available = items.find((i) => !lines.some((l) => l.productId === i.id));
     if (available) setLines([...lines, { productId: available.id, quantity: 1, pricingOption: 'NORMAL' }]);
@@ -368,13 +379,19 @@ export default function SalesPage() {
             </p>
           )}
           <div className="space-y-3">
-            {sales
-              .filter((s) =>
-                (s.customer?.name ?? s.guestName ?? 'Walk-in')
-                  .toLowerCase()
-                  .includes(search.toLowerCase()),
-              )
-              .map((s) => (
+            {salesLoading ? (
+              <p className="rounded-2xl border border-ink/10 bg-white p-8 text-sm text-ink/55" role="status">
+                {sales.length > 0 ? 'Refreshing sales history…' : 'Loading sales history…'}
+              </p>
+            ) : salesLoadError ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-ink/10 bg-white p-8 text-sm text-ink/55" role="alert">
+                <span>Could not load sales history: {salesLoadError}</span>
+                <button type="button" className="font-semibold text-accent underline" onClick={() => void load()}>
+                  Retry
+                </button>
+              </div>
+            ) : filteredSales.length > 0 ? (
+              filteredSales.map((s) => (
                 <button
                   key={s.id}
                   onClick={() => void openSale(s.id)}
@@ -395,10 +412,10 @@ export default function SalesPage() {
                     <p className="font-semibold">{money(s.total)}</p>
                   </div>
                 </button>
-              ))}
-            {!sales.length && (
+              ))
+            ) : (
               <div className="rounded-2xl border border-dashed border-ink/20 p-8 text-sm text-ink/55">
-                No sales recorded yet.
+                {hasHistoryFilters ? 'No sales match these filters.' : 'No sales recorded yet.'}
               </div>
             )}
           </div>
