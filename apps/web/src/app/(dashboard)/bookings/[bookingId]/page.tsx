@@ -83,7 +83,7 @@ export default function BookingDetailPage() {
             <div className="mt-2 flex flex-wrap items-center justify-between gap-4">
               <h1 className="text-4xl font-semibold">{booking.customer.name}</h1>
               <span className="rounded-full bg-paper px-4 py-2 text-sm font-semibold">
-                {booking.status.replaceAll('_', ' ')}
+                {booking.status.replace(/_/g, ' ')}
               </span>
             </div>
             <p className="mt-3 text-ink/65">

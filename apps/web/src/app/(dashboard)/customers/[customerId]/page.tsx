@@ -153,7 +153,7 @@ export default function CustomerProfilePage() {
                       {new Date(booking.checkOut).toLocaleDateString()}
                     </span>
                     <span className="text-sm text-ink/60">
-                      {booking.status.replaceAll('_', ' ')}
+                      {booking.status.replace(/_/g, ' ')}
                     </span>
                   </div>
                   <p className="mt-2 text-sm text-ink/65">{booking.invoice ? <>Invoice total {cash(booking.totalAmount)} · paid {cash(booking.invoice.amountPaid)} · due {cash(booking.invoice.balance)}</> : <>Booking total {cash(booking.totalAmount)} · not invoiced</>}</p>

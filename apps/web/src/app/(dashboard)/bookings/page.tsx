@@ -269,7 +269,7 @@ export default function BookingsPage() {
                       </p>
                     </div>
                     <span className="rounded-full bg-paper px-3 py-1 text-xs font-semibold">
-                      {booking.status.replaceAll('_', ' ')}
+                      {booking.status.replace(/_/g, ' ')}
                     </span>
                   </div>
                   <p className="mt-3 text-sm text-ink/70">
