@@ -28,13 +28,17 @@ type Sale = {
   }[];
   movements?: { id: string; quantity: number; product: { name: string } }[];
 };
+type SalesPage = { data: Sale[]; total: number; page: number; pageSize: number };
 const field = 'mt-2 w-full rounded-xl border border-ink/15 bg-white px-4 py-3';
 const money = (n: string | number) => formatMoney(String(n));
+const salesPageSize = 25;
 export default function SalesPage() {
   const idempotencyKey = useRef<string | null>(null);
   const [items, setItems] = useState<Item[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
+  const [salesTotal, setSalesTotal] = useState(0);
+  const [historyPage, setHistoryPage] = useState(1);
   const [salesLoading, setSalesLoading] = useState(true);
   const [salesLoadError, setSalesLoadError] = useState('');
   const [selected, setSelected] = useState<Sale | null>(null);
@@ -50,6 +54,7 @@ export default function SalesPage() {
   const [customerFilter, setCustomerFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [search, setSearch] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [staff, setStaff] = useState<StaffMember[]>([]);
@@ -65,31 +70,36 @@ export default function SalesPage() {
       if (recordedBy) params.set('recordedById', recordedBy);
       if (from) params.set('from', new Date(from).toISOString());
       if (to) params.set('to', new Date(`${to}T23:59:59`).toISOString());
+      if (searchTerm) params.set('q', searchTerm);
+      params.set('page', String(historyPage));
+      params.set('pageSize', String(salesPageSize));
       const [catalog, guests, history] = await Promise.all([
         apiRequest<Item[]>('/catalog'),
         apiRequest<Customer[]>('/customers'),
-        apiRequest<Sale[]>(`/sales${params.size ? `?${params}` : ''}`),
+        apiRequest<SalesPage>(`/sales?${params}`),
       ]);
       setItems(catalog);
       setCustomers(guests);
-      setSales(history);
+      setSales(history.data);
+      setSalesTotal(history.total);
     } catch (e) {
       setSalesLoadError(e instanceof Error ? e.message : 'Unable to load sales history');
     } finally {
       setSalesLoading(false);
     }
-  }, [filter, customerFilter, statusFilter, from, to, recordedBy]);
+  }, [filter, customerFilter, statusFilter, from, to, recordedBy, historyPage, searchTerm]);
   useEffect(() => {
     void load();
   }, [load]);
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setSearchTerm(search.trim()), 250);
+    return () => window.clearTimeout(timeout);
+  }, [search]);
   useEffect(() => { void apiRequest<{role:string|null}>('/auth/me').then(me => { if(me.role==='OWNER') return apiRequest<Array<{user:StaffMember}>>('/businesses/staff').then(rows=>setStaff(rows.map(row=>row.user))); }).catch(()=>{}); }, []);
   const priceFor = (line: { productId: string; pricingOption: 'NORMAL' | 'PARTY' }) => { const item = items.find(i => i.id === line.productId); return item?.module === 'LODGING' ? (line.pricingOption === 'PARTY' ? item.partyRate : item.normalRate) : item?.module === 'GYM' ? item.monthlyPrice : item?.sellingPrice ?? '0'; };
   const total = useMemo(() => sumMoney(lines.map(line => multiplyMoney(priceFor(line), line.quantity))), [lines, items]);
-  const filteredSales = sales.filter((sale) =>
-    (sale.customer?.name ?? sale.guestName ?? 'Walk-in')
-      .toLowerCase()
-      .includes(search.toLowerCase()),
-  );
+  const historyPageCount = Math.max(1, Math.ceil(salesTotal / salesPageSize));
+  const filteredSales = sales;
   const hasHistoryFilters = Boolean(filter || customerFilter || statusFilter || recordedBy || from || to || search);
   function addLine() {
     const available = items.find((i) => !lines.some((l) => l.productId === i.id));
@@ -300,14 +310,16 @@ export default function SalesPage() {
           <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
             <div>
               <h2 className="text-xl font-semibold">Sales history</h2>
-              <p className="mt-1 text-sm text-ink/55">{sales.length} recent sales</p>
+              <p className="mt-1 text-sm text-ink/55">
+                {salesTotal} sales · Page {historyPage} of {historyPageCount}
+              </p>
             </div>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               <label className="text-xs font-medium">
                 Search
                 <input
                   value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  onChange={(e) => { setHistoryPage(1); setSearch(e.target.value); }}
                   className={field}
                   placeholder="Guest name"
                 />
@@ -316,7 +328,7 @@ export default function SalesPage() {
                 Customer
                 <select
                   value={customerFilter}
-                  onChange={(e) => setCustomerFilter(e.target.value)}
+                  onChange={(e) => { setHistoryPage(1); setCustomerFilter(e.target.value); }}
                   className={field}
                 >
                   <option value="">All customers</option>
@@ -331,7 +343,7 @@ export default function SalesPage() {
                 Payment
                 <select
                   value={filter}
-                  onChange={(e) => setFilter(e.target.value)}
+                  onChange={(e) => { setHistoryPage(1); setFilter(e.target.value); }}
                   className={field}
                 >
                   <option value="">All methods</option>
@@ -344,7 +356,7 @@ export default function SalesPage() {
                 Status
                 <select
                   value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
+                  onChange={(e) => { setHistoryPage(1); setStatusFilter(e.target.value); }}
                   className={field}
                 >
                   <option value="">All statuses</option>
@@ -352,13 +364,13 @@ export default function SalesPage() {
                   <option value="CANCELLED">Cancelled</option>
                 </select>
               </label>
-              {staff.length>0 && <label className="text-xs font-medium">Recorded by<select value={recordedBy} onChange={e=>setRecordedBy(e.target.value)} className={field}><option value="">All staff</option>{staff.map(member=><option key={member.id} value={member.id}>{member.name}</option>)}</select></label>}
+              {staff.length>0 && <label className="text-xs font-medium">Recorded by<select value={recordedBy} onChange={e=>{setHistoryPage(1);setRecordedBy(e.target.value)}} className={field}><option value="">All staff</option>{staff.map(member=><option key={member.id} value={member.id}>{member.name}</option>)}</select></label>}
               <label className="text-xs font-medium">
                 From
                 <input
                   type="date"
                   value={from}
-                  onChange={(e) => setFrom(e.target.value)}
+                  onChange={(e) => { setHistoryPage(1); setFrom(e.target.value); }}
                   className={field}
                 />
               </label>
@@ -367,7 +379,7 @@ export default function SalesPage() {
                 <input
                   type="date"
                   value={to}
-                  onChange={(e) => setTo(e.target.value)}
+                  onChange={(e) => { setHistoryPage(1); setTo(e.target.value); }}
                   className={field}
                 />
               </label>
@@ -419,6 +431,27 @@ export default function SalesPage() {
               </div>
             )}
           </div>
+          {salesTotal > salesPageSize && (
+            <nav aria-label="Sales history pages" className="mt-4 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                className="min-h-11 rounded-xl border border-ink/15 px-4 py-2 text-sm disabled:opacity-50"
+                disabled={salesLoading || historyPage <= 1}
+                onClick={() => setHistoryPage((current) => current - 1)}
+              >
+                Previous
+              </button>
+              <span className="text-sm text-ink/60">Page {historyPage} of {historyPageCount}</span>
+              <button
+                type="button"
+                className="min-h-11 rounded-xl border border-ink/15 px-4 py-2 text-sm disabled:opacity-50"
+                disabled={salesLoading || historyPage >= historyPageCount}
+                onClick={() => setHistoryPage((current) => current + 1)}
+              >
+                Next
+              </button>
+            </nav>
+          )}
           {selected && (
             <article className="mt-6 rounded-3xl border border-accent/20 bg-white p-6">
               <div className="flex justify-between">

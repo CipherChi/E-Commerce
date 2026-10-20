@@ -4,6 +4,7 @@ import { Request } from 'express';
 import { BusinessContextGuard } from '../auth/business-context.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreateSaleDto } from './dto/create-sale.dto';
+import { ListSalesDto } from './dto/list-sales.dto';
 import { SalesService } from './sales.service';
 type AuthReq = Request & { user: { businessId: string; sub: string } };
 @ApiTags('sales')
@@ -12,17 +13,8 @@ type AuthReq = Request & { user: { businessId: string; sub: string } };
 @Controller('sales')
 export class SalesController {
   constructor(private readonly sales: SalesService) {}
-  @Get() list(
-    @Req() req: AuthReq,
-    @Query('from') from?: string,
-    @Query('to') to?: string,
-    @Query('customerId') customerId?: string,
-    @Query('paymentMethod') paymentMethod?: string,
-    @Query('status') status?: string,
-    @Query('paymentStatus') paymentStatus?: string,
-    @Query('recordedById') recordedById?: string,
-  ) {
-    return this.sales.list(req.user.businessId, { from, to, customerId, paymentMethod, status, paymentStatus, recordedById });
+  @Get() list(@Req() req: AuthReq, @Query() query: ListSalesDto) {
+    return this.sales.list(req.user.businessId, query);
   }
   @Get(':id') get(@Req() req: AuthReq, @Param('id') id: string) {
     return this.sales.get(req.user.businessId, id);

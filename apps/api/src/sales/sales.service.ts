@@ -166,32 +166,52 @@ export class SalesService {
       status?: string;
       paymentStatus?: string;
       recordedById?: string;
+      q?: string;
+      page?: number;
+      pageSize?: number;
     },
   ) {
-    return this.prisma.sale.findMany({
-      where: {
-        businessId,
-        ...(query.recordedById ? { createdById: query.recordedById } : {}),
-        ...(query.customerId ? { customerId: query.customerId } : {}),
-        ...(query.paymentMethod ? { paymentMethod: query.paymentMethod as never } : {}),
-        ...(query.status ? { status: query.status as never } : {}),
-        ...(query.paymentStatus ? { paymentStatus: query.paymentStatus as never } : {}),
-        ...(query.from || query.to
-          ? {
-              createdAt: {
-                ...(query.from ? { gte: new Date(query.from) } : {}),
-                ...(query.to ? { lte: new Date(query.to) } : {}),
-              },
-            }
-          : {}),
-      },
-      include: {
-        customer: { select: { id: true, name: true, phone: true } },
-        createdBy: { select: { id: true, name: true } },
-        _count: { select: { items: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    const where: Prisma.SaleWhereInput = {
+      businessId,
+      ...(query.recordedById ? { createdById: query.recordedById } : {}),
+      ...(query.customerId ? { customerId: query.customerId } : {}),
+      ...(query.paymentMethod ? { paymentMethod: query.paymentMethod as never } : {}),
+      ...(query.status ? { status: query.status as never } : {}),
+      ...(query.paymentStatus ? { paymentStatus: query.paymentStatus as never } : {}),
+      ...(query.q?.trim()
+        ? {
+            OR: [
+              { guestName: { contains: query.q.trim(), mode: 'insensitive' } },
+              { customer: { is: { name: { contains: query.q.trim(), mode: 'insensitive' } } } },
+            ],
+          }
+        : {}),
+      ...(query.from || query.to
+        ? {
+            createdAt: {
+              ...(query.from ? { gte: new Date(query.from) } : {}),
+              ...(query.to ? { lte: new Date(query.to) } : {}),
+            },
+          }
+        : {}),
+    };
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 25;
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.sale.findMany({
+        where,
+        include: {
+          customer: { select: { id: true, name: true, phone: true } },
+          createdBy: { select: { id: true, name: true } },
+          _count: { select: { items: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.sale.count({ where }),
+    ]);
+    return { data, total, page, pageSize };
   }
 
   async get(businessId: string, id: string) {
