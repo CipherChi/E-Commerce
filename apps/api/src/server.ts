@@ -1,4 +1,3 @@
-import 'reflect-metadata';
 import { createApp } from './app';
 import { loadExpressEnvironment } from './config/express-env';
 import { createContainer } from './lib/container';

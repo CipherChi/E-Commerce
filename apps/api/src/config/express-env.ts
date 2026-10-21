@@ -9,8 +9,6 @@ const envSchema = z.object({
   API_ORIGIN: z.string().optional(),
   REDIS_URL: z.string().optional(),
   TRUST_PROXY: z.string().optional(),
-  SWAGGER_USERNAME: z.string().optional(),
-  SWAGGER_PASSWORD: z.string().optional(),
   NODE_ENV: z.string().optional(),
 }).passthrough().refine((env) => env.JWT_ACCESS_SECRET !== env.JWT_REFRESH_SECRET, {
   message: 'JWT_ACCESS_SECRET and JWT_REFRESH_SECRET must be different values',

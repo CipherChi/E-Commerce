@@ -1,4 +1,3 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
 import {
   BusinessModuleType,
   Prisma,
@@ -7,10 +6,10 @@ import {
   SalePaymentStatus,
   SaleStatus,
 } from '@prisma/client';
-import { Test } from '@nestjs/testing';
+import { Express } from 'express';
 import * as request from 'supertest';
-import { AppModule } from '../src/app.module';
-import { PrismaService } from '../src/prisma/prisma.service';
+import { createApp } from '../src/app';
+import { createContainer } from '../src/lib/container';
 
 const databaseUrl = process.env.TENANT_TEST_DATABASE_URL;
 // This inventory is parsed by tenant-schema-coverage.spec.ts and maps schema
@@ -39,10 +38,12 @@ if (!databaseUrl)
 process.env.DATABASE_URL = databaseUrl;
 process.env.JWT_ACCESS_SECRET = 'tenant-test-access-secret';
 process.env.JWT_REFRESH_SECRET = 'tenant-test-refresh-secret';
+process.env.WEB_ORIGIN = process.env.WEB_ORIGIN ?? 'http://localhost:3000';
 
 describe('Cross-business isolation (real Postgres)', () => {
-  let app: INestApplication;
+  let app: Express;
   let prisma: PrismaClient;
+  let container: ReturnType<typeof createContainer>;
   const businessIds: string[] = [];
   const userIds: string[] = [];
   const resources: Record<
@@ -61,31 +62,28 @@ describe('Cross-business isolation (real Postgres)', () => {
   let activityLogBId: string;
 
   beforeAll(async () => {
-    const module = await Test.createTestingModule({ imports: [AppModule] }).compile();
-    app = module.createNestApplication();
-    app.useGlobalPipes(
-      new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }),
-    );
-    await app.init();
-    prisma = app.get(PrismaService);
+    container = createContainer(process.env);
+    prisma = container.prisma;
+    await prisma.$connect();
+    app = createApp({ dependencies: container });
 
     const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const makeMember = async (label: string) => {
       const email = `${label}-${suffix}@example.test`;
       const password = 'tenant-test-password-123';
-      await request(app.getHttpServer())
+      await request(app)
         .post('/auth/register')
         .send({ email, password, name: label, primaryType: 'HOTEL' })
         .expect(201);
       const user = await prisma.user.findUniqueOrThrow({ where: { email } });
       userIds.push(user.id);
       await prisma.user.update({ where: { id: user.id }, data: { role: Role.ADMIN } });
-      const login = await request(app.getHttpServer())
+      const login = await request(app)
         .post('/auth/login')
         .send({ email, password })
         .expect(201);
       const auth = { Authorization: `Bearer ${login.body.accessToken}` };
-      const business = await request(app.getHttpServer())
+      const business = await request(app)
         .post('/businesses')
         .set(auth)
         .send({
@@ -342,7 +340,7 @@ describe('Cross-business isolation (real Postgres)', () => {
       }
       await prisma.user.deleteMany({ where: { id: { in: userIds } } });
     }
-    await app?.close();
+    await prisma?.$disconnect();
   });
 
   it('uses the current business membership instead of a global ADMIN role', async () => {
@@ -351,38 +349,45 @@ describe('Cross-business isolation (real Postgres)', () => {
       where: { businessId: businessBId },
     });
     expect(
-      await prisma.user.findUniqueOrThrow({ where: { id: memberB.userId } }).then((user) => user.role),
+      await prisma.user
+        .findUniqueOrThrow({ where: { id: memberB.userId } })
+        .then((user) => user.role),
     ).toBe('ADMIN');
     await prisma.businessMember.update({
       where: { businessId_userId: { businessId: businessBId, userId: memberB.userId } },
       data: { role: 'STAFF' },
     });
 
-    await request(app.getHttpServer())
+    await request(app)
       .get('/businesses/staff')
       .set('Authorization', tokenB)
       .expect(403);
-    await request(app.getHttpServer())
+    await request(app)
       .get('/businesses/staff')
       .set('Authorization', tokenA)
       .expect(200);
-    const dashboard = await request(app.getHttpServer())
+    const dashboard = await request(app)
       .get('/dashboard/summary')
       .set('Authorization', tokenB)
       .expect(200);
     expect(dashboard.body.revenue).toBe('0.00');
-    const catalog = await request(app.getHttpServer())
+    const catalog = await request(app)
       .get('/catalog?pageSize=100')
       .set('Authorization', tokenB)
       .expect(200);
-    const privateProduct = catalog.body.data.find((product: { id: string }) => product.id === productBId);
+    const privateProduct = catalog.body.data.find(
+      (product: { id: string }) => product.id === productBId,
+    );
     expect(privateProduct).toBeDefined();
     expect(privateProduct).not.toHaveProperty('costPrice');
   });
 
   it('deactivates one staff membership without disabling their other business', async () => {
     const owner = await prisma.user.findUniqueOrThrow({
-      where: { id: (await prisma.businessMember.findFirstOrThrow({ where: { businessId: businessAId } })).userId },
+      where: {
+        id: (await prisma.businessMember.findFirstOrThrow({ where: { businessId: businessAId } }))
+          .userId,
+      },
     });
     const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const email = `multi-business-staff-${suffix}@example.test`;
@@ -396,37 +401,54 @@ describe('Cross-business isolation (real Postgres)', () => {
         memberships: {
           create: [
             { businessId: businessAId, role: 'STAFF', createdAt: new Date('2025-01-01T00:00:00Z') },
-            { businessId: resources.businesses[0].id, role: 'STAFF', createdAt: new Date('2025-01-02T00:00:00Z') },
+            {
+              businessId: resources.businesses[0].id,
+              role: 'STAFF',
+              createdAt: new Date('2025-01-02T00:00:00Z'),
+            },
           ],
         },
       },
     });
     userIds.push(staff.id);
-    const login = await request(app.getHttpServer()).post('/auth/login').send({ email, password }).expect(201);
+    const login = await request(app)
+      .post('/auth/login')
+      .send({ email, password })
+      .expect(201);
     const originalToken = `Bearer ${login.body.accessToken}`;
-    await request(app.getHttpServer())
+    await request(app)
       .patch(`/businesses/staff/${staff.id}`)
       .set('Authorization', tokenA)
       .send({ isActive: false })
       .expect(200);
 
-    await request(app.getHttpServer()).get('/auth/me').set('Authorization', originalToken).expect(401);
-    await request(app.getHttpServer())
+    await request(app)
+      .get('/auth/me')
+      .set('Authorization', originalToken)
+      .expect(401);
+    await request(app)
       .post('/auth/refresh')
-      .send({ refreshToken: login.body.refreshToken })
+      .set('Origin', process.env.WEB_ORIGIN!)
+      .set('Cookie', login.headers['set-cookie'][0].split(';', 1)[0])
       .expect(401);
 
-    const relogin = await request(app.getHttpServer()).post('/auth/login').send({ email, password }).expect(201);
+    const relogin = await request(app)
+      .post('/auth/login')
+      .send({ email, password })
+      .expect(201);
     const businessBToken = `Bearer ${relogin.body.accessToken}`;
-    await request(app.getHttpServer()).get('/businesses/profile').set('Authorization', businessBToken).expect(200);
-    await request(app.getHttpServer())
+    await request(app)
+      .get('/businesses/profile')
+      .set('Authorization', businessBToken)
+      .expect(200);
+    await request(app)
       .get(`/customers/${resources.customers[0].id}`)
       .set('Authorization', businessBToken)
       .expect(200);
     const customerA = await prisma.customer.create({
       data: { businessId: businessAId, name: 'Business A customer', phone: `+234802${Date.now()}` },
     });
-    await request(app.getHttpServer())
+    await request(app)
       .get(`/customers/${customerA.id}`)
       .set('Authorization', businessBToken)
       .expect(404);
@@ -436,10 +458,12 @@ describe('Cross-business isolation (real Postgres)', () => {
       orderBy: { businessId: 'asc' },
       select: { businessId: true, isActive: true },
     });
-    expect(memberships).toEqual([
-      { businessId: businessAId, isActive: false },
-      { businessId: resources.businesses[0].id, isActive: true },
-    ].sort((a, b) => a.businessId.localeCompare(b.businessId)));
+    expect(memberships).toEqual(
+      [
+        { businessId: businessAId, isActive: false },
+        { businessId: resources.businesses[0].id, isActive: true },
+      ].sort((a, b) => a.businessId.localeCompare(b.businessId)),
+    );
   });
 
   it('rejects generic writes for payment and invoice records and exposes no generic money routes', async () => {
@@ -458,9 +482,10 @@ describe('Cross-business isolation (real Postgres)', () => {
       ['DELETE', `/inventory/${productBId}/movements`, 404],
     ];
     for (const [method, path, status, body] of requests) {
-      let call = method === 'PATCH'
-        ? request(app.getHttpServer()).patch(path)
-        : request(app.getHttpServer()).delete(path);
+      let call =
+        method === 'PATCH'
+          ? request(app).patch(path)
+          : request(app).delete(path);
       call = call.set('Authorization', tokenB);
       if (body) call = call.send(body);
       await call.expect(status);
@@ -492,7 +517,7 @@ describe('Cross-business isolation (real Postgres)', () => {
     const productA = await makeProduct(businessAId, 'Concurrent sale A');
     const productB = await makeProduct(resources.businesses[0].id, 'Concurrent sale B');
     const postSale = (token: string, productId: string, key: string) =>
-      request(app.getHttpServer())
+      request(app)
         .post('/sales')
         .set('Authorization', token)
         .set('Idempotency-Key', key)
@@ -559,7 +584,7 @@ describe('Cross-business isolation (real Postgres)', () => {
   };
 
   const postStockSale = (productId: string, key: string, quantity = 3) =>
-    request(app.getHttpServer())
+    request(app)
       .post('/sales')
       .set('Authorization', tokenA)
       .set('Idempotency-Key', key)
@@ -653,7 +678,11 @@ describe('Cross-business isolation (real Postgres)', () => {
   });
 
   it('returns the same sale for five concurrent requests with one idempotency key', async () => {
-    const product = await makeStockableProduct(businessAId, `Concurrent idempotency ${Date.now()}`, 7);
+    const product = await makeStockableProduct(
+      businessAId,
+      `Concurrent idempotency ${Date.now()}`,
+      7,
+    );
     const key = `concurrent-idempotency-${Date.now()}`;
     const responses = await Promise.all(
       Array.from({ length: 5 }, () => postStockSale(product.id, key)),
@@ -663,7 +692,9 @@ describe('Cross-business isolation (real Postgres)', () => {
     expect(new Set(responses.map((response) => response.body.receiptNumber)).size).toBe(1);
 
     const saleId = responses[0].body.id;
-    expect(await prisma.sale.count({ where: { businessId: businessAId, idempotencyKey: key } })).toBe(1);
+    expect(
+      await prisma.sale.count({ where: { businessId: businessAId, idempotencyKey: key } }),
+    ).toBe(1);
     expect(
       await prisma.stockMovement.count({
         where: { businessId: businessAId, productId: product.id, type: 'STOCK_OUT' },
@@ -685,7 +716,9 @@ describe('Cross-business isolation (real Postgres)', () => {
       100,
     );
     const year = Number(
-      new Intl.DateTimeFormat('en', { timeZone: 'Africa/Lagos', year: 'numeric' }).format(new Date()),
+      new Intl.DateTimeFormat('en', { timeZone: 'Africa/Lagos', year: 'numeric' }).format(
+        new Date(),
+      ),
     );
     const sequenceBefore = await prisma.receiptSequence.findUnique({
       where: { businessId_year: { businessId: businessAId, year } },
@@ -711,8 +744,9 @@ describe('Cross-business isolation (real Postgres)', () => {
     const receiptNumbers = successful.map((response) => response.body.receiptNumber).sort();
     expect(new Set(receiptNumbers).size).toBe(successful.length);
     expect(receiptNumbers).toEqual(
-      Array.from({ length: successful.length }, (_, index) =>
-        `RCT-${year}-${String(firstNumber + index + 1).padStart(6, '0')}`,
+      Array.from(
+        { length: successful.length },
+        (_, index) => `RCT-${year}-${String(firstNumber + index + 1).padStart(6, '0')}`,
       ),
     );
     const saleIds = successful.map((response) => response.body.id);
@@ -733,16 +767,16 @@ describe('Cross-business isolation (real Postgres)', () => {
     'rejects Business A GET, PATCH, and DELETE for Business B %s, while preserving the row',
     async (entity) => {
       const record = resources[entity][0];
-      const get = await request(app.getHttpServer()).get(record.path).set('Authorization', tokenA);
+      const get = await request(app).get(record.path).set('Authorization', tokenA);
       expect(get.status).toBe(404);
       console.log(`${entity} GET ${record.path}: HTTP ${get.status}`);
-      const patch = await request(app.getHttpServer())
+      const patch = await request(app)
         .patch(record.path)
         .set('Authorization', tokenA)
         .send(record.patch);
       expect(patch.status).toBe(404);
       console.log(`${entity} PATCH ${record.path}: HTTP ${patch.status}`);
-      const remove = await request(app.getHttpServer())
+      const remove = await request(app)
         .delete(record.path)
         .set('Authorization', tokenA);
       expect(remove.status).toBe(404);
@@ -769,11 +803,11 @@ describe('Cross-business isolation (real Postgres)', () => {
   );
 
   it('does not return another business customer from list or search', async () => {
-    const list = await request(app.getHttpServer())
+    const list = await request(app)
       .get('/customers?pageSize=100')
       .set('Authorization', tokenA)
       .expect(200);
-    const search = await request(app.getHttpServer())
+    const search = await request(app)
       .get('/customers?q=Business%20B%20customer&pageSize=100')
       .set('Authorization', tokenA)
       .expect(200);
@@ -784,7 +818,7 @@ describe('Cross-business isolation (real Postgres)', () => {
   });
 
   it('keeps booking lists tenant scoped and rejects foreign rooms, customers, and booking actions', async () => {
-    const list = await request(app.getHttpServer())
+    const list = await request(app)
       .get('/bookings?page=1&pageSize=10')
       .set('Authorization', tokenA)
       .expect(200);
@@ -820,7 +854,7 @@ describe('Cross-business isolation (real Postgres)', () => {
         phone: '+2348022222222',
       },
     });
-    await request(app.getHttpServer())
+    await request(app)
       .post('/bookings')
       .set('Authorization', tokenA)
       .send({
@@ -830,7 +864,7 @@ describe('Cross-business isolation (real Postgres)', () => {
         checkOut: '2031-04-02',
       })
       .expect(404);
-    await request(app.getHttpServer())
+    await request(app)
       .post('/bookings')
       .set('Authorization', tokenA)
       .send({
@@ -840,7 +874,7 @@ describe('Cross-business isolation (real Postgres)', () => {
         checkOut: '2031-04-02',
       })
       .expect(404);
-    await request(app.getHttpServer())
+    await request(app)
       .post('/bookings')
       .set('Authorization', tokenA)
       .send({
@@ -853,7 +887,7 @@ describe('Cross-business isolation (real Postgres)', () => {
       .expect(400);
 
     for (const action of ['check-in', 'check-out', 'cancel', 'no-show']) {
-      await request(app.getHttpServer())
+      await request(app)
         .post(`/bookings/${resources.bookings[0].id}/${action}`)
         .set('Authorization', tokenA)
         .expect(404);
@@ -861,43 +895,43 @@ describe('Cross-business isolation (real Postgres)', () => {
   });
 
   it('keeps catalog, inventory, sales, receipts, expenses and activity tenant scoped', async () => {
-    const catalog = await request(app.getHttpServer())
+    const catalog = await request(app)
       .get('/catalog?pageSize=100')
       .set('Authorization', tokenA)
       .expect(200);
-    const categories = await request(app.getHttpServer())
+    const categories = await request(app)
       .get('/catalog/categories')
       .set('Authorization', tokenA)
       .expect(200);
-    const stockable = await request(app.getHttpServer())
+    const stockable = await request(app)
       .get('/inventory/products')
       .set('Authorization', tokenA)
       .expect(200);
-    const lowStock = await request(app.getHttpServer())
+    const lowStock = await request(app)
       .get('/inventory/low-stock')
       .set('Authorization', tokenA)
       .expect(200);
-    const sales = await request(app.getHttpServer())
+    const sales = await request(app)
       .get('/sales?pageSize=100')
       .set('Authorization', tokenA)
       .expect(200);
-    const expenses = await request(app.getHttpServer())
+    const expenses = await request(app)
       .get('/expenses')
       .set('Authorization', tokenA)
       .expect(200);
-    const expenseCategories = await request(app.getHttpServer())
+    const expenseCategories = await request(app)
       .get('/expenses/categories')
       .set('Authorization', tokenA)
       .expect(200);
-    const summary = await request(app.getHttpServer())
+    const summary = await request(app)
       .get('/expenses/summary')
       .set('Authorization', tokenA)
       .expect(200);
-    const activity = await request(app.getHttpServer())
+    const activity = await request(app)
       .get('/activity')
       .set('Authorization', tokenA)
       .expect(200);
-    const dashboard = await request(app.getHttpServer())
+    const dashboard = await request(app)
       .get('/dashboard/summary')
       .set('Authorization', tokenA)
       .expect(200);
@@ -936,7 +970,7 @@ describe('Cross-business isolation (real Postgres)', () => {
     expect(dashboard.body.moduleCards).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ module: 'FOOD', value: 1 })]),
     );
-    const historicDashboard = await request(app.getHttpServer())
+    const historicDashboard = await request(app)
       .get('/dashboard/summary?date=2030-01-01')
       .set('Authorization', tokenA)
       .expect(200);
@@ -948,126 +982,126 @@ describe('Cross-business isolation (real Postgres)', () => {
     expect(historicDashboard.body.arrivalsToday).toBe(0);
     expect(historicDashboard.body.departuresToday).toBe(0);
 
-    await request(app.getHttpServer())
+    await request(app)
       .get(`/catalog/${productBId}`)
       .set('Authorization', tokenA)
       .expect(404);
-    await request(app.getHttpServer())
+    await request(app)
       .patch(`/catalog/${productBId}`)
       .set('Authorization', tokenA)
       .send({ name: 'x' })
       .expect(404);
-    await request(app.getHttpServer())
+    await request(app)
       .post(`/catalog/${productBId}/archive`)
       .set('Authorization', tokenA)
       .expect(404);
-    await request(app.getHttpServer())
+    await request(app)
       .get(`/inventory/${productBId}/current`)
       .set('Authorization', tokenA)
       .expect(404);
-    await request(app.getHttpServer())
+    await request(app)
       .get(`/inventory/${productBId}/movements`)
       .set('Authorization', tokenA)
       .expect(404);
-    await request(app.getHttpServer())
+    await request(app)
       .get(`/sales/${saleBId}`)
       .set('Authorization', tokenA)
       .expect(404);
-    await request(app.getHttpServer())
+    await request(app)
       .patch(`/sales/${saleBId}`)
       .set('Authorization', tokenA)
       .send({ guestName: 'Hijacked' })
       .expect(404);
-    await request(app.getHttpServer())
+    await request(app)
       .delete(`/sales/${saleBId}`)
       .set('Authorization', tokenA)
       .expect(404);
-    await request(app.getHttpServer())
+    await request(app)
       .patch(`/sales/${saleBId}/items/${saleItemBId}`)
       .set('Authorization', tokenA)
       .send({ quantity: 99 })
       .expect(404);
-    await request(app.getHttpServer())
+    await request(app)
       .delete(`/sales/${saleBId}/items/${saleItemBId}`)
       .set('Authorization', tokenA)
       .expect(404);
-    await request(app.getHttpServer())
+    await request(app)
       .get(`/receipts/${saleBId}`)
       .set('Authorization', tokenA)
       .expect(404);
-    await request(app.getHttpServer())
+    await request(app)
       .patch(`/receipts/${saleBId}`)
       .set('Authorization', tokenA)
       .send({})
       .expect(404);
-    await request(app.getHttpServer())
+    await request(app)
       .delete(`/receipts/${saleBId}`)
       .set('Authorization', tokenA)
       .expect(404);
-    await request(app.getHttpServer())
+    await request(app)
       .patch(`/inventory/${productBId}/movements`)
       .set('Authorization', tokenA)
       .send({ quantity: 99 })
       .expect(404);
-    await request(app.getHttpServer())
+    await request(app)
       .delete(`/inventory/${productBId}/movements`)
       .set('Authorization', tokenA)
       .expect(404);
     const catalogCategoryId = resources.catalogCategories[0].id;
-    await request(app.getHttpServer())
+    await request(app)
       .get(`/catalog/categories/${catalogCategoryId}`)
       .set('Authorization', tokenA)
       .expect(404);
-    await request(app.getHttpServer())
+    await request(app)
       .patch(`/catalog/categories/${catalogCategoryId}`)
       .set('Authorization', tokenA)
       .send({ name: 'Hijacked' })
       .expect(404);
-    await request(app.getHttpServer())
+    await request(app)
       .delete(`/catalog/categories/${catalogCategoryId}`)
       .set('Authorization', tokenA)
       .expect(404);
-    await request(app.getHttpServer())
+    await request(app)
       .patch(`/activity/${activityLogBId}`)
       .set('Authorization', tokenA)
       .send({ action: 'Hijacked' })
       .expect(404);
-    await request(app.getHttpServer())
+    await request(app)
       .delete(`/activity/${activityLogBId}`)
       .set('Authorization', tokenA)
       .expect(404);
-    await request(app.getHttpServer())
+    await request(app)
       .patch(`/expenses/${expenseBId}`)
       .set('Authorization', tokenA)
       .send({ categoryId: expenseCategoryBId, amount: '1.00', expenseDate: '2020-01-01' })
       .expect(404);
-    await request(app.getHttpServer())
+    await request(app)
       .delete(`/expenses/${expenseBId}`)
       .set('Authorization', tokenA)
       .expect(404);
-    await request(app.getHttpServer())
+    await request(app)
       .patch(`/expenses/categories/${expenseCategoryBId}`)
       .set('Authorization', tokenA)
       .send({ name: 'Hijacked' })
       .expect(404);
-    await request(app.getHttpServer())
+    await request(app)
       .delete(`/expenses/categories/${expenseCategoryBId}`)
       .set('Authorization', tokenA)
       .expect(404);
 
-    const profile = await request(app.getHttpServer())
+    const profile = await request(app)
       .get('/businesses/profile')
       .set('Authorization', tokenA)
       .expect(200);
     expect(profile.body.name).not.toBe(businessBName);
-    const modules = await request(app.getHttpServer())
+    const modules = await request(app)
       .get('/businesses/modules')
       .set('Authorization', tokenA)
       .expect(200);
     expect(modules.body).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ businessId: resources.businesses[0].id })]),
     );
-    await request(app.getHttpServer())
+    await request(app)
       .patch('/businesses/modules')
       .set('Authorization', tokenA)
       .send({ module: 'FOOD', isEnabled: false })
@@ -1113,7 +1147,7 @@ describe('Cross-business isolation (real Postgres)', () => {
   });
 
   it('returns 200 from /health when the real Postgres database is up', async () => {
-    await request(app.getHttpServer())
+    await request(app)
       .get('/health')
       .expect(200)
       .expect({ status: 'ok', database: 'ok' });
@@ -1121,16 +1155,16 @@ describe('Cross-business isolation (real Postgres)', () => {
 
   it('hides invoice details and rejects payment writes across businesses', async () => {
     const invoice = resources.invoices[0];
-    await request(app.getHttpServer()).get(invoice.path).set('Authorization', tokenA).expect(404);
-    await request(app.getHttpServer())
+    await request(app).get(invoice.path).set('Authorization', tokenA).expect(404);
+    await request(app)
       .post(`/invoices/${invoice.id}/void`)
       .set('Authorization', tokenA)
       .expect(404);
-    await request(app.getHttpServer())
+    await request(app)
       .get(`${invoice.path}/payments`)
       .set('Authorization', tokenA)
       .expect(404);
-    await request(app.getHttpServer())
+    await request(app)
       .post(`${invoice.path}/payments`)
       .set('Authorization', tokenA)
       .send({ amount: '1.00', method: 'CASH', reference: 'cross-tenant' })

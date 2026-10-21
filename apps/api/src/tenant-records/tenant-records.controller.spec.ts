@@ -1,38 +1,28 @@
-import { CanActivate, ExecutionContext, INestApplication } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { BusinessContextGuard } from '../auth/business-context.guard';
-import { RolesGuard } from '../auth/roles.guard';
-import { TenantRecordsController } from './tenant-records.controller';
-import { TenantRecordsService } from './tenant-records.service';
-
-class RequestRoleGuard implements CanActivate {
-  canActivate(context: ExecutionContext) {
-    const req = context.switchToHttp().getRequest();
-    req.user = { businessId: 'business-a', sub: 'user-a', role: req.headers['x-role'] ?? 'STAFF' };
-    return true;
-  }
-}
+import { createApp } from '../app';
 
 describe('TenantRecordsController policy', () => {
-  let app: INestApplication;
-  beforeAll(async () => {
-    const module = await Test.createTestingModule({
-      controllers: [TenantRecordsController],
-      providers: [
-        { provide: TenantRecordsService, useValue: { get: jest.fn().mockResolvedValue({ id: 'payment-a' }), update: jest.fn(), remove: jest.fn() } },
-        BusinessContextGuard,
-        RolesGuard,
-      ],
-    }).overrideGuard(JwtAuthGuard).useClass(RequestRoleGuard).compile();
-    app = module.createNestApplication();
-    await app.init();
+  let membershipRole = 'STAFF';
+  const prisma = {
+    businessMember: { findFirst: jest.fn(({ where }: any) => where.isActive ? { businessId: 'business-a', role: membershipRole } : { id: 'membership-a' }) },
+    user: { findUnique: jest.fn().mockResolvedValue({ isActive: true, tokenVersion: 0 }) },
+  };
+  const methods = new Proxy({}, { get: () => jest.fn().mockResolvedValue({ id: 'payment-a' }) });
+  const app = createApp({
+    environment: { DATABASE_URL: 'postgresql://localhost/test', JWT_ACCESS_SECRET: 'access-secret', JWT_REFRESH_SECRET: 'refresh-secret', WEB_ORIGIN: 'http://localhost:3000' },
+    logger: { log: jest.fn(), error: jest.fn() },
+    dependencies: {
+      prisma: prisma as never,
+      jwt: { verifyAsync: jest.fn().mockResolvedValue({ sub: 'user-a', email: 'a@example.com', role: 'ADMIN', tokenVersion: 0 }) } as never,
+      auth: {} as never,
+      controllers: new Proxy({}, { get: () => methods }) as never,
+    } as never,
   });
-  afterAll(async () => app.close());
 
   it('requires OWNER to view a payment by ID', async () => {
-    await request(app.getHttpServer()).get('/payments/payment-a').set('x-role', 'STAFF').expect(403);
-    await request(app.getHttpServer()).get('/payments/payment-a').set('x-role', 'OWNER').expect(200);
+    const get = () => request(app).get('/payments/payment-a').set('Authorization', 'Bearer test-token');
+    await get().expect(403);
+    membershipRole = 'OWNER';
+    await get().expect(200);
   });
 });

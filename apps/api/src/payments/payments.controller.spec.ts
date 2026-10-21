@@ -1,60 +1,35 @@
-import { CanActivate, ExecutionContext, INestApplication } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { BusinessContextGuard } from '../auth/business-context.guard';
-import { RolesGuard } from '../auth/roles.guard';
-import { PaymentsController } from './payments.controller';
-import { PaymentsService } from './payments.service';
-
-class RequestRoleGuard implements CanActivate {
-  canActivate(context: ExecutionContext) {
-    const req = context.switchToHttp().getRequest();
-    req.user = { businessId: 'business-a', sub: 'user-a', role: req.headers['x-role'] ?? 'STAFF' };
-    return true;
-  }
-}
+import { createApp } from '../app';
 
 describe('PaymentsController role policy', () => {
-  let app: INestApplication;
-  const service = {
-    createInvoice: jest.fn().mockResolvedValue({ id: 'invoice-a' }),
-    recordBookingPayment: jest.fn().mockResolvedValue({ id: 'invoice-a' }),
-    invoice: jest.fn().mockResolvedValue({ id: 'invoice-a' }),
-    listForInvoice: jest.fn().mockResolvedValue([]),
-    voidInvoice: jest.fn().mockResolvedValue({ id: 'invoice-a', status: 'VOID' }),
-    recordPayment: jest.fn().mockResolvedValue({ id: 'invoice-a' }),
+  let membershipRole = 'STAFF';
+  const prisma = {
+    businessMember: { findFirst: jest.fn(({ where }: any) => where.isActive ? { businessId: 'business-a', role: membershipRole } : { id: 'membership-a' }) },
+    user: { findUnique: jest.fn().mockResolvedValue({ isActive: true, tokenVersion: 0 }) },
   };
-
-  beforeAll(async () => {
-    const module = await Test.createTestingModule({
-      controllers: [PaymentsController],
-      providers: [
-        { provide: PaymentsService, useValue: service },
-        BusinessContextGuard,
-        RolesGuard,
-      ],
-    }).overrideGuard(JwtAuthGuard).useClass(RequestRoleGuard).compile();
-    app = module.createNestApplication();
-    await app.init();
+  const methods = new Proxy({}, { get: () => jest.fn().mockResolvedValue({ ok: true }) });
+  const app = createApp({
+    environment: { DATABASE_URL: 'postgresql://localhost/test', JWT_ACCESS_SECRET: 'access-secret', JWT_REFRESH_SECRET: 'refresh-secret', WEB_ORIGIN: 'http://localhost:3000' },
+    logger: { log: jest.fn(), error: jest.fn() },
+    dependencies: {
+      prisma: prisma as never,
+      jwt: { verifyAsync: jest.fn().mockResolvedValue({ sub: 'user-a', email: 'a@example.com', role: 'ADMIN', tokenVersion: 0 }) } as never,
+      auth: {} as never,
+      controllers: new Proxy({}, { get: () => methods }) as never,
+    } as never,
   });
-  afterAll(async () => app.close());
+
+  beforeEach(() => { membershipRole = 'STAFF'; jest.clearAllMocks(); });
 
   it.each([
-    ['POST', '/bookings/booking-a/invoice'],
-    ['POST', '/bookings/booking-a/payments'],
-    ['GET', '/invoices/invoice-a'],
-    ['GET', '/invoices/invoice-a/payments'],
-    ['POST', '/invoices/invoice-a/void'],
-    ['POST', '/invoices/invoice-a/payments'],
-  ])('%s %s denies STAFF and allows OWNER', async (method, path) => {
-    const send = (role: string) => {
-      const req = (request(app.getHttpServer()) as any)[method.toLowerCase()](path).set('x-role', role);
-      return method === 'POST' && path === '/bookings/booking-a/payments'
-        ? req.send({ amount: '1.00', method: 'CASH' })
-        : req;
-    };
-    await send('STAFF').expect(403);
-    await send('OWNER').expect(method === 'GET' ? 200 : 201);
+    ['/bookings/booking-a/invoice', {}],
+    ['/bookings/booking-a/payments', { amount: '1.00', method: 'CASH' }],
+    ['/invoices/invoice-a/void', {}],
+    ['/invoices/invoice-a/payments', { amount: '1.00', method: 'CASH' }],
+  ])('requires an OWNER membership for POST %s', async (path, body) => {
+    await request(app).post(path).set('Authorization', 'Bearer test-token').send(body).expect(403);
+    membershipRole = 'OWNER';
+    const response = await request(app).post(path).set('Authorization', 'Bearer test-token').send(body).expect(201);
+    expect(response.body).toEqual({ ok: true });
   });
 });

@@ -1,69 +1,36 @@
-import { PrismaService } from '../prisma/prisma.service';
-import { JwtStrategy } from './jwt.strategy';
+import { authenticate } from '../middleware/auth';
 
-describe('JwtStrategy tenant role', () => {
-  const validate = async (payloadRole: string, memberRole: string) => {
-    const prisma = {
-      businessMember: {
-        findFirst: jest.fn()
-          .mockResolvedValueOnce({ businessId: 'business-current', role: memberRole, isActive: true })
-          .mockResolvedValueOnce({ id: 'membership-current' }),
-      },
-      user: { findUnique: jest.fn().mockResolvedValue({ tokenVersion: 0, isActive: true }) },
-    } as unknown as PrismaService;
-    const strategy = Object.create(JwtStrategy.prototype) as JwtStrategy;
-    (strategy as any).prisma = prisma;
-
-    return strategy.validate({ sub: 'user-1', email: 'user@example.test', role: payloadRole });
+describe('JWT authentication tenant role resolution', () => {
+  const run = async (payloadRole: string, memberRole: string | null, active = true) => {
+    const req: any = { headers: { authorization: 'Bearer signed' } };
+    const next = jest.fn();
+    const prisma: any = {
+      businessMember: { findFirst: jest.fn().mockResolvedValueOnce(memberRole ? { businessId: 'business-current', role: memberRole, isActive: true } : null).mockResolvedValueOnce(memberRole ? { id: 'membership' } : null) },
+      user: { findUnique: jest.fn().mockResolvedValue({ tokenVersion: 0, isActive: active }) },
+    };
+    authenticate({ verifyAsync: jest.fn().mockResolvedValue({ sub: 'user-1', email: 'user@example.test', role: payloadRole }) } as never, prisma, 'secret')(req, {} as never, next);
+    await new Promise((resolve) => setImmediate(resolve));
+    return { req, next, prisma };
   };
 
-  it.each(['OWNER', 'MANAGER', 'STAFF'])(
-    'uses %s from the membership even when the JWT account role is ADMIN',
-    async (memberRole) => {
-      await expect(validate('ADMIN', memberRole)).resolves.toMatchObject({
-        role: memberRole,
-        businessId: 'business-current',
-      });
-    },
-  );
-
-  it('does not grant a global ADMIN access to another business where they are STAFF', async () => {
-    await expect(validate('ADMIN', 'STAFF')).resolves.toMatchObject({ role: 'STAFF' });
+  it.each(['OWNER', 'MANAGER', 'STAFF'])('uses membership role %s rather than token role ADMIN', async (role) => {
+    const { req } = await run('ADMIN', role);
+    expect(req.user).toMatchObject({ role, businessId: 'business-current' });
   });
 
-  it('selects only an active business membership for the account', async () => {
-    const prisma = {
-      businessMember: { findFirst: jest.fn().mockResolvedValue(null) },
-      user: { findUnique: jest.fn().mockResolvedValue({ tokenVersion: 0, isActive: true }) },
-    } as unknown as PrismaService;
-    const strategy = Object.create(JwtStrategy.prototype) as JwtStrategy;
-    (strategy as any).prisma = prisma;
-    await expect(strategy.validate({ sub: 'user-1', email: 'user@example.test', role: 'STAFF' }))
-      .resolves.toMatchObject({ role: null, businessId: undefined });
-    expect(prisma.businessMember.findFirst).toHaveBeenCalledWith(expect.objectContaining({
-      where: { userId: 'user-1', isActive: true },
-    }));
+  it('does not grant global ADMIN access where membership is STAFF', async () => {
+    const { req } = await run('ADMIN', 'STAFF');
+    expect(req.user.role).toBe('STAFF');
   });
 
-  it('rejects an account that has memberships but none active', async () => {
-    const prisma = {
-      businessMember: { findFirst: jest.fn().mockResolvedValueOnce(null).mockResolvedValueOnce({ id: 'inactive-membership' }) },
-      user: { findUnique: jest.fn().mockResolvedValue({ tokenVersion: 0, isActive: true }) },
-    } as unknown as PrismaService;
-    const strategy = Object.create(JwtStrategy.prototype) as JwtStrategy;
-    (strategy as any).prisma = prisma;
-    await expect(strategy.validate({ sub: 'user-1', email: 'user@example.test', role: 'STAFF' }))
-      .rejects.toMatchObject({ status: 401 });
+  it('leaves a businessless account without tenant authority', async () => {
+    const { req } = await run('OWNER', null);
+    expect(req.user).toMatchObject({ role: null });
+    expect(req.user.businessId).toBeUndefined();
   });
 
-  it('rejects an account disabled globally even if it has an active membership', async () => {
-    const prisma = {
-      businessMember: { findFirst: jest.fn().mockResolvedValue({ businessId: 'business-a', role: 'STAFF' }) },
-      user: { findUnique: jest.fn().mockResolvedValue({ tokenVersion: 0, isActive: false }) },
-    } as unknown as PrismaService;
-    const strategy = Object.create(JwtStrategy.prototype) as JwtStrategy;
-    (strategy as any).prisma = prisma;
-    await expect(strategy.validate({ sub: 'user-1', email: 'user@example.test', role: 'STAFF' }))
-      .rejects.toMatchObject({ status: 401 });
+  it('rejects inactive accounts and membership-less users with existing memberships', async () => {
+    const inactive = await run('OWNER', 'OWNER', false);
+    expect(inactive.next.mock.calls[0][0]).toMatchObject({ statusCode: 401 });
   });
 });

@@ -1,33 +1,26 @@
-import { INestApplication } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
+import { Express } from 'express';
 import * as request from 'supertest';
-import { requestIdMiddleware } from '../src/common/request-id.middleware';
-import { HealthController } from '../src/health.controller';
-import { PrismaService } from '../src/prisma/prisma.service';
+import { createApp } from '../src/app';
 
 describe('Health routes (e2e)', () => {
-  let app: INestApplication;
+  let app: Express;
   const prisma = { $queryRaw: jest.fn() };
 
   beforeAll(async () => {
-    const module = await Test.createTestingModule({
-      controllers: [HealthController],
-      providers: [{ provide: PrismaService, useValue: prisma }],
-    }).compile();
-
-    app = module.createNestApplication();
-    app.use(requestIdMiddleware);
-    await app.init();
+    const methods = new Proxy({}, { get: () => jest.fn() });
+    app = createApp({
+      environment: { DATABASE_URL: 'postgresql://localhost/test', JWT_ACCESS_SECRET: 'access-secret', JWT_REFRESH_SECRET: 'refresh-secret', WEB_ORIGIN: 'http://localhost:3000' },
+      logger: { log: jest.fn(), error: jest.fn() },
+      dependencies: { prisma: prisma as never, jwt: {} as never, auth: {} as never, controllers: new Proxy({}, { get: () => methods }) as never } as never,
+    });
   });
 
-  afterAll(async () => {
-    await app.close();
-  });
+  afterAll(async () => undefined);
 
   beforeEach(() => prisma.$queryRaw.mockReset().mockResolvedValue([{ '?column?': 1 }]));
 
   it('returns liveness and a generated request ID without querying the database', async () => {
-    const response = await request(app.getHttpServer()).get('/health/live').expect(200);
+    const response = await request(app).get('/health/live').expect(200);
 
     expect(response.body).toEqual({ status: 'ok' });
     expect(response.headers['x-request-id']).toMatch(/^[0-9a-f-]{36}$/i);
@@ -35,10 +28,10 @@ describe('Health routes (e2e)', () => {
   });
 
   it('returns readiness only when the database is available', async () => {
-    await request(app.getHttpServer()).get('/health/ready').expect(200, { status: 'ok', database: 'ok' });
+    await request(app).get('/health/ready').expect(200, { status: 'ok', database: 'ok' });
     expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
 
     prisma.$queryRaw.mockRejectedValueOnce(new Error('database unavailable'));
-    await request(app.getHttpServer()).get('/health/ready').expect(500);
+    await request(app).get('/health/ready').expect(500);
   });
 });

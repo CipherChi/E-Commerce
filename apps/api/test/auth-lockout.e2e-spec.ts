@@ -1,10 +1,8 @@
-import { INestApplication, UnauthorizedException, ValidationPipe } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { createHash } from 'crypto';
-import { Test } from '@nestjs/testing';
-import { AppModule } from '../src/app.module';
 import { AuthService } from '../src/auth/auth.service';
-import { PrismaService } from '../src/prisma/prisma.service';
+import { UnauthorizedException } from '../src/lib/http-errors';
+import { createContainer } from '../src/lib/container';
 
 const databaseUrl = process.env.TENANT_TEST_DATABASE_URL;
 if (!databaseUrl) throw new Error('Set TENANT_TEST_DATABASE_URL to a dedicated migrated Postgres test database.');
@@ -13,9 +11,9 @@ process.env.JWT_ACCESS_SECRET = 'tenant-test-access-secret';
 process.env.JWT_REFRESH_SECRET = 'tenant-test-refresh-secret';
 
 describe('Login lockout (real Postgres)', () => {
-  let app: INestApplication;
   let auth: AuthService;
   let prisma: PrismaClient;
+  let container: ReturnType<typeof createContainer>;
   let userId: string;
   let email: string;
   let unknownEmail: string;
@@ -26,12 +24,10 @@ describe('Login lockout (real Postgres)', () => {
   const attemptKeys: string[] = [];
 
   beforeAll(async () => {
-    const module = await Test.createTestingModule({ imports: [AppModule] }).compile();
-    app = module.createNestApplication();
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }));
-    await app.init();
-    auth = app.get(AuthService);
-    prisma = app.get(PrismaService);
+    container = createContainer(process.env);
+    auth = container.auth;
+    prisma = container.prisma;
+    await prisma.$connect();
 
     const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     email = `lockout-${suffix}@example.test`;
@@ -54,11 +50,11 @@ describe('Login lockout (real Postgres)', () => {
       }
       await prisma.user.delete({ where: { id: userId } });
     }
-    await app?.close();
+    await prisma?.$disconnect();
   });
 
   it('returns one generic error for unknown, wrong-password, and locked attempts', async () => {
-    const errorOf = async (promise: Promise<unknown>): Promise<UnauthorizedException> => {
+    const errorOf = async (promise: Promise<unknown>): Promise<InstanceType<typeof UnauthorizedException>> => {
       try {
         await promise;
       } catch (error) {

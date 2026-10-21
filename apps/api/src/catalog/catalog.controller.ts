@@ -1,50 +1,50 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+
+
 import { Request } from 'express';
-import { BusinessContextGuard } from '../auth/business-context.guard';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { Roles } from '../auth/roles.decorator';
-import { RolesGuard } from '../auth/roles.guard';
+
+
+
+
 import { CatalogService } from './catalog.service';
 import { CreateCatalogItemDto, UpdateCatalogItemDto } from './dto/catalog.dto';
 import { ListCatalogDto } from './dto/list-catalog.dto';
 
-@ApiTags('catalog')
-@ApiBearerAuth()
-@UseGuards(JwtAuthGuard, BusinessContextGuard)
-@Controller('catalog')
+
+
+
+
 export class CatalogController {
   constructor(private readonly catalog: CatalogService) {}
-  @Get() list(
-    @Req() req: Request & { user: { businessId: string; role?: string } },
-    @Query() query: ListCatalogDto,
+   list(
+     req: Request & { user: { businessId: string; role?: string } },
+     query: ListCatalogDto,
   ) {
     return this.catalog.list(req.user.businessId, query).then(result => req.user.role === 'OWNER'
       ? result
       : { ...result, data: result.data.map(({ costPrice, ...item }) => item) });
   }
-  @Get('categories') categories(@Req() req: Request & { user: { businessId: string } }) {
+   categories( req: Request & { user: { businessId: string } }) {
     return this.catalog.categories(req.user.businessId);
   }
-  @Get(':id') get(@Req() req: Request & { user: { businessId: string; role?: string } }, @Param('id') id: string) {
+   get( req: Request & { user: { businessId: string; role?: string } },  id: string) {
     return this.catalog.get(req.user.businessId, id).then(({ costPrice, ...item }) => req.user.role === 'OWNER' ? { costPrice, ...item } : item);
   }
-  @Post() @UseGuards(RolesGuard) @Roles('ADMIN') create(
-    @Req() req: Request & { user: { businessId: string } },
-    @Body() dto: CreateCatalogItemDto,
+     create(
+     req: Request & { user: { businessId: string } },
+     dto: CreateCatalogItemDto,
   ) {
     return this.catalog.create(req.user.businessId, dto);
   }
-  @Patch(':id') @UseGuards(RolesGuard) @Roles('ADMIN') update(
-    @Req() req: Request & { user: { businessId: string } },
-    @Param('id') id: string,
-    @Body() dto: UpdateCatalogItemDto,
+     update(
+     req: Request & { user: { businessId: string } },
+     id: string,
+     dto: UpdateCatalogItemDto,
   ) {
     return this.catalog.update(req.user.businessId, id, dto);
   }
-  @Post(':id/archive') @UseGuards(RolesGuard) @Roles('ADMIN') archive(
-    @Req() req: Request & { user: { businessId: string } },
-    @Param('id') id: string,
+     archive(
+     req: Request & { user: { businessId: string } },
+     id: string,
   ) {
     return this.catalog.archive(req.user.businessId, id);
   }

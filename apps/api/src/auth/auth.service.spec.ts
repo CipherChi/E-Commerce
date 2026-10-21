@@ -1,4 +1,4 @@
-import { ConflictException, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, UnauthorizedException } from '../lib/http-errors';
 import { AuthService } from './auth.service';
 import * as argon2 from 'argon2';
 
@@ -26,6 +26,7 @@ describe('AuthService', () => {
   let service: AuthService;
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.spyOn(argon2, 'hash').mockResolvedValue('test-argon-hash');
     service = new AuthService(prisma, jwt, config);
   });
 
@@ -56,7 +57,12 @@ describe('AuthService', () => {
   it('rejects duplicate registration', async () => {
     prisma.user.findUnique.mockResolvedValue(user);
     await expect(
-      service.register({ email: user.email, name: user.name, password: 'password123', primaryType: 'HOTEL' as never }),
+      service.register({
+        email: user.email,
+        name: user.name,
+        password: 'password123',
+        primaryType: 'HOTEL' as never,
+      }),
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
@@ -71,7 +77,9 @@ describe('AuthService', () => {
   it('records failures, applies progressive lockout, and returns the same login error', async () => {
     prisma.user.findUnique.mockResolvedValue(user);
     jest.spyOn(argon2, 'verify').mockResolvedValue(false);
-    await expect(service.login({ email: user.email, password: 'incorrect' }, '192.0.2.1')).rejects.toThrow('Invalid email or password');
+    await expect(
+      service.login({ email: user.email, password: 'incorrect' }, '192.0.2.1'),
+    ).rejects.toThrow('Invalid email or password');
     const [sqlParts, , threshold, maxLockMs] = prisma.$executeRaw.mock.calls[0];
     expect(sqlParts).toEqual(
       expect.arrayContaining([
@@ -90,12 +98,21 @@ describe('AuthService', () => {
   it('returns identical generic errors for unknown, wrong-password, and locked attempts', async () => {
     prisma.user.findUnique.mockResolvedValue(null);
     const verify = jest.spyOn(argon2, 'verify').mockResolvedValue(false);
-    const unknownError = await service.login({ email: 'missing@example.test', password: 'incorrect' }).catch((error) => error);
+    const unknownError = await service
+      .login({ email: 'missing@example.test', password: 'incorrect' })
+      .catch((error) => error);
     prisma.user.findUnique.mockResolvedValue(user);
     prisma.loginAttempt.findUnique.mockResolvedValue(null);
-    const wrongPasswordError = await service.login({ email: user.email, password: 'incorrect' }).catch((error) => error);
-    prisma.loginAttempt.findUnique.mockResolvedValue({ key: 'locked', lockedUntil: new Date(Date.now() + 60_000) });
-    const lockedError = await service.login({ email: user.email, password: 'incorrect' }).catch((error) => error);
+    const wrongPasswordError = await service
+      .login({ email: user.email, password: 'incorrect' })
+      .catch((error) => error);
+    prisma.loginAttempt.findUnique.mockResolvedValue({
+      key: 'locked',
+      lockedUntil: new Date(Date.now() + 60_000),
+    });
+    const lockedError = await service
+      .login({ email: user.email, password: 'incorrect' })
+      .catch((error) => error);
     for (const error of [wrongPasswordError, lockedError]) {
       expect(error.getStatus()).toBe(unknownError.getStatus());
       expect(error.message).toBe(unknownError.message);
@@ -125,8 +142,12 @@ describe('AuthService', () => {
     prisma.user.findUnique.mockResolvedValue(user);
     prisma.loginAttempt.findUnique.mockResolvedValue(null);
     jest.spyOn(argon2, 'verify').mockResolvedValue(false);
-    await expect(service.login({ email: user.email, password: 'bad' }, '192.0.2.1')).rejects.toThrow();
-    await expect(service.login({ email: user.email, password: 'bad' }, '192.0.2.2')).rejects.toThrow();
+    await expect(
+      service.login({ email: user.email, password: 'bad' }, '192.0.2.1'),
+    ).rejects.toThrow();
+    await expect(
+      service.login({ email: user.email, password: 'bad' }, '192.0.2.2'),
+    ).rejects.toThrow();
     const keys = prisma.loginAttempt.findUnique.mock.calls.map((call: any[]) => call[0].where.key);
     expect(keys[0]).not.toBe(keys[2]);
     expect(keys[1]).toBe(keys[3]);
@@ -169,6 +190,21 @@ describe('AuthService', () => {
     );
   });
 
+  it('invalidates the session when a validly signed rotated refresh token is replayed', async () => {
+    prisma.user.findUnique.mockResolvedValue({ ...user, refreshTokenHash: 'newer-hash' });
+    jwt.verifyAsync.mockResolvedValue({ sub: user.id, tokenVersion: 0 });
+    prisma.user.update.mockResolvedValue(user);
+    jest.spyOn(argon2, 'verify').mockResolvedValue(false);
+
+    await expect(service.refresh(user.id, 'replayed-refresh-token')).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: user.id },
+      data: { refreshTokenHash: null, tokenVersion: { increment: 1 } },
+    });
+  });
+
   it('rejects refresh tokens revoked by staff deactivation', async () => {
     prisma.user.findUnique.mockResolvedValue({
       ...user,
@@ -176,7 +212,9 @@ describe('AuthService', () => {
       refreshTokenHash: null,
     });
     jwt.verifyAsync.mockResolvedValue({ sub: user.id, tokenVersion: 0 });
-    await expect(service.refresh(user.id, 'old-refresh-token')).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(service.refresh(user.id, 'old-refresh-token')).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
   });
 
   it('stores only a hash of the issued refresh token', async () => {
@@ -184,7 +222,9 @@ describe('AuthService', () => {
     prisma.user.create.mockResolvedValue(user);
     prisma.user.update.mockResolvedValue(user);
     jest.spyOn(argon2, 'hash').mockResolvedValue('argon2-refresh-hash');
-    jwt.signAsync.mockResolvedValueOnce('access-token').mockResolvedValueOnce('plain-refresh-token');
+    jwt.signAsync
+      .mockResolvedValueOnce('access-token')
+      .mockResolvedValueOnce('plain-refresh-token');
 
     const session = await service.register({
       email: user.email,
@@ -194,7 +234,9 @@ describe('AuthService', () => {
     });
 
     expect(session.refreshToken).toBe('plain-refresh-token');
-    const tokenStorage = prisma.user.update.mock.calls.find((call: any[]) => call[0].data.refreshTokenHash);
+    const tokenStorage = prisma.user.update.mock.calls.find(
+      (call: any[]) => call[0].data.refreshTokenHash,
+    );
     expect(tokenStorage[0]).toEqual({
       where: { id: user.id },
       data: { refreshTokenHash: 'argon2-refresh-hash' },

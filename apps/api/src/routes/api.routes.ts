@@ -13,7 +13,8 @@ type Args = (req: Request, res: Response) => unknown[];
 function handler(controller: AnyController, method: string, args: Args, status: number, fullPath: string): RequestHandler {
   return asyncHandler(async (req, res) => {
     const parsed: { body: unknown; query: unknown } = { body: req.body, query: req.query };
-    applyApiValidation(req.method, fullPath, parsed);
+    const validationPath = fullPath.length > 1 ? fullPath.replace(/\/$/, '') : fullPath;
+    applyApiValidation(req.method, validationPath, parsed);
     if (parsed.body !== undefined) req.body = parsed.body;
     if (parsed.query !== undefined) Object.defineProperty(req, 'query', { configurable: true, value: parsed.query });
     const result = await controller[method](...args(req, res) as never[]);

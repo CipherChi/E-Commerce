@@ -1,47 +1,29 @@
-import { ArgumentsHost, BadRequestException, Logger } from '@nestjs/common';
-import { HttpExceptionFilter } from './http-exception.filter';
+import express = require('express');
+import * as request from 'supertest';
+import { requestIdMiddleware } from './request-id.middleware';
+import { errorHandler } from '../middleware/error-handler';
+import { captureRouteTemplate } from '../middleware/request-logger';
+import { BadRequestException } from '../lib/http-errors';
 
-describe('HttpExceptionFilter', () => {
-  it('includes the request ID in the standard error envelope', () => {
-    const request = {
-      method: 'POST', path: '/auth/login', url: '/auth/login', requestId: 'request-123',
-      baseUrl: '', route: { path: '/auth/login' },
-    };
-    const response = { status: jest.fn().mockReturnThis(), json: jest.fn() };
-    const host = {
-      switchToHttp: () => ({ getRequest: () => request, getResponse: () => response }),
-    } as unknown as ArgumentsHost;
+describe('Express error middleware', () => {
+  it('wraps known and unknown errors in the compatibility envelope', async () => {
+    const logger = { error: jest.fn() };
+    const app = express();
+    app.use(requestIdMiddleware);
+    app.get('/bad', (_req, _res, next) => next(new BadRequestException('invalid input')));
+    app.get('/crash', (_req, _res, next) => next(new Error('private detail')));
+    app.get('/receipts/public/:token', captureRouteTemplate, (_req, _res, next) => next(new Error('receipt failure')));
+    app.use(errorHandler(logger));
 
-    new HttpExceptionFilter().catch(new BadRequestException('invalid'), host);
-
-    expect(response.status).toHaveBeenCalledWith(400);
-    expect(response.json).toHaveBeenCalledWith(
-      expect.objectContaining({ statusCode: 400, path: '/auth/login', requestId: 'request-123' }),
-    );
-  });
-
-  it('uses a structured log for server errors', () => {
-    const request = {
-      method: 'GET', path: '/resource', url: '/resource?token=secret', requestId: 'request-456',
-      baseUrl: '', route: { path: '/resource/:id' },
-    };
-    const response = { status: jest.fn().mockReturnThis(), json: jest.fn() };
-    const host = {
-      switchToHttp: () => ({ getRequest: () => request, getResponse: () => response }),
-    } as unknown as ArgumentsHost;
-    const logger = jest.spyOn(Logger.prototype, 'error').mockImplementation();
-
-    new HttpExceptionFilter().catch(new Error('failure'), host);
-
-    const structured = JSON.parse(logger.mock.calls[0][0]);
-    expect(structured).toEqual({
-      event: 'http_exception',
-      requestId: 'request-456',
-      method: 'GET',
-      path: '/resource/:id',
-      statusCode: 500,
-    });
-    expect(JSON.stringify(structured)).not.toContain('secret');
-    logger.mockRestore();
+    const bad = await request(app).get('/bad?q=1').expect(400);
+    expect(bad.body).toMatchObject({ statusCode: 400, message: { statusCode: 400 }, path: '/bad?q=1', requestId: expect.any(String) });
+    const crash = await request(app).get('/crash').expect(500);
+    expect(crash.body.message).toBe('Internal server error');
+    expect(JSON.stringify(crash.body)).not.toContain('private detail');
+    expect(logger.error).toHaveBeenCalledTimes(1);
+    await request(app).get('/receipts/public/capability-token').expect(500);
+    const safeLog = JSON.parse(logger.error.mock.calls[1][0]);
+    expect(safeLog.path).toBe('/receipts/public/:token');
+    expect(JSON.stringify(safeLog)).not.toContain('capability-token');
   });
 });
