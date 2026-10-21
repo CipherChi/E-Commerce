@@ -1,9 +1,4 @@
-import {
-  ConflictException,
-  Injectable,
-  NotFoundException,
-  UnprocessableEntityException,
-} from '@nestjs/common';
+import { ConflictException, NotFoundException, UnprocessableEntityException } from '../lib/http-errors';
 import { BookingStatus, Prisma, RoomStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
@@ -54,7 +49,7 @@ function isRoomDateConflict(error: unknown) {
   );
 }
 
-@Injectable()
+
 export class BookingsService {
   constructor(private readonly prisma: PrismaService) {}
 

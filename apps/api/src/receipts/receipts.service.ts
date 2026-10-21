@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '../lib/http-errors';
 import { Prisma } from '@prisma/client';
 import PDFDocument = require('pdfkit');
 import { formatReceiptMoney } from '@hotel/shared-types/src/money.js';
@@ -12,7 +12,7 @@ const receiptInclude = {
 } satisfies Prisma.SaleInclude;
 type ReceiptSale = Prisma.SaleGetPayload<{ include: typeof receiptInclude }>;
 
-@Injectable()
+
 export class ReceiptsService {
   constructor(private readonly prisma: PrismaService) {}
 

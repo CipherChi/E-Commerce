@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '../lib/http-errors';
 import { RoomsService } from './rooms.service';
 
 describe('RoomsService', () => {

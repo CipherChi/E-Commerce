@@ -1,9 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-  ServiceUnavailableException,
-} from '@nestjs/common';
+import { BadRequestException, NotFoundException, ServiceUnavailableException } from '../lib/http-errors';
 import { randomBytes } from 'crypto';
 import { Prisma, SalePaymentStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -12,7 +7,7 @@ import { deriveInvoiceFinancials } from '../finance/invoice-financials';
 
 const MAX_SERIALIZABLE_RETRIES = 10;
 
-@Injectable()
+
 export class SalesService {
   constructor(private prisma: PrismaService) {}
 

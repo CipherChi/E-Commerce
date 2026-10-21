@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '../lib/http-errors';
 import * as argon2 from 'argon2';
 import { BusinessModuleType, BusinessType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -10,7 +10,7 @@ const primaryModule: Record<BusinessType, BusinessModuleType> = {
   SUPERMARKET: BusinessModuleType.FOOD,
 };
 
-@Injectable()
+
 export class BusinessesService {
   constructor(private prisma: PrismaService) {}
 

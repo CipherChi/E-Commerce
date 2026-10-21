@@ -4,6 +4,7 @@ import { authenticate, requireBusinessContext, requireRole } from '../middleware
 import { asyncHandler } from '../lib/async-handler';
 import { rateLimit } from '../middleware/rate-limit';
 import { applyApiValidation } from '../validation/api.schemas';
+import { captureRouteTemplate } from '../middleware/request-logger';
 
 type AnyController = Record<string, (...args: never[]) => unknown>;
 type Req = Request & { user?: { sub?: string; businessId?: string; role?: string | null } };
@@ -26,7 +27,7 @@ function handler(controller: AnyController, method: string, args: Args, status: 
 let currentPrefix = '';
 function register(router: Router, verb: 'get' | 'post' | 'patch' | 'delete', path: string, c: AnyController, method: string, args: Args = (req) => [req], policy: 'public' | 'jwt' | 'business' | 'admin' = 'business', status = verb === 'post' ? 201 : 200) {
   const guards: RequestHandler[] = policy === 'public' ? [] : policy === 'jwt' ? [authMiddleware] : policy === 'admin' ? [authMiddleware, requireBusinessContext, requireRole('ADMIN')] : [authMiddleware, requireBusinessContext];
-  router[verb](path, ...guards, handler(c, method, args, status, `${currentPrefix}${path}`));
+  router[verb](path, captureRouteTemplate, ...guards, handler(c, method, args, status, `${currentPrefix}${path}`));
 }
 
 let authMiddleware: RequestHandler;
@@ -108,8 +109,8 @@ export function mountApiRoutes(app: Express, container: ApiContainer, accessSecr
 
   const receipts = Router();
   currentPrefix = '/receipts';
-  receipts.get('/public/:token/pdf', rateLimit(20, 60_000, redisUrl, 'receipt:pdf'), asyncHandler(async (req, res) => c.receipts.publicPdf(...[req.params.token, res] as never[])));
-  receipts.get('/public/:token', rateLimit(20, 60_000, redisUrl, 'receipt:public'), handler(c.receipts, 'publicGet', requestArgs(param('token')), 200, '/receipts/public/:token'));
+  receipts.get('/public/:token/pdf', captureRouteTemplate, rateLimit(20, 60_000, redisUrl, 'receipt:pdf'), asyncHandler(async (req, res) => c.receipts.publicPdf(...[req.params.token, res] as never[])));
+  receipts.get('/public/:token', captureRouteTemplate, rateLimit(20, 60_000, redisUrl, 'receipt:public'), handler(c.receipts, 'publicGet', requestArgs(param('token')), 200, '/receipts/public/:token'));
   register(receipts, 'get', '/:saleId', c.receipts, 'get', requestArgs(req, param('saleId'))); app.use('/receipts', receipts);
 
   const bookings = Router();

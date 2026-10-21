@@ -1,9 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '../lib/http-errors';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePropertyDto } from './dto/create-property.dto';
 import { UpdatePropertyDto } from './dto/update-property.dto';
 
-@Injectable()
+
 export class PropertiesService {
   constructor(private prisma: PrismaService) {}
 

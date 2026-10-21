@@ -1,12 +1,12 @@
 import { NextFunction, Request, RequestHandler, Response } from 'express';
-import { JwtService } from '@nestjs/jwt';
 import { PrismaClient } from '@prisma/client';
 import { asyncHandler } from '../lib/async-handler';
+import { JwtPort } from '../lib/jwt';
 
 export type AuthUser = { sub: string; email: string; role: string | null; businessId?: string; tokenVersion?: number };
 type AuthRequest = Request & { user?: AuthUser };
 
-export function authenticate(jwt: JwtService, prisma: PrismaClient, accessSecret: string): RequestHandler {
+export function authenticate(jwt: JwtPort, prisma: PrismaClient, accessSecret: string): RequestHandler {
   return asyncHandler(async (req: AuthRequest, _res: Response, next: NextFunction) => {
     const match = /^Bearer\s+(.+)$/i.exec(req.headers.authorization ?? '');
     if (!match) return next(unauthorized());

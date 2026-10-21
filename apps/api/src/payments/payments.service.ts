@@ -1,10 +1,10 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '../lib/http-errors';
 import { InvoiceStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { deriveInvoiceFinancials } from '../finance/invoice-financials';
 import { RecordPaymentDto } from './dto/record-payment.dto';
 
-@Injectable()
+
 export class PaymentsService {
   constructor(private readonly prisma: PrismaService) {}
 

@@ -1,9 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '../lib/http-errors';
 import { PrismaService } from '../prisma/prisma.service';
 
 type Resource = 'booking' | 'payment' | 'invoice';
 
-@Injectable()
+
 export class TenantRecordsService {
   constructor(private prisma: PrismaService) {}
 

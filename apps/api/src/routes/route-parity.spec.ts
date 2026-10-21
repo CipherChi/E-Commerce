@@ -12,7 +12,8 @@ describe('documented route parity', () => {
   const controllerMethods = new Proxy({}, { get: (_target, property) => property === 'publicPdf' ? (_token: string, res: { status: (code: number) => { send: (data: string) => void } }) => res.status(200).send('pdf') : jest.fn().mockResolvedValue({ ok: true }) });
   const controllers = new Proxy({}, { get: () => controllerMethods });
   const auth = { register: jest.fn().mockResolvedValue({ accessToken: 'a', refreshToken: 'r' }), login: jest.fn().mockResolvedValue({ accessToken: 'a', refreshToken: 'r' }), refresh: jest.fn(), logout: jest.fn(), me: jest.fn() };
-  const app = createApp({ environment, logger: { log: jest.fn(), error: jest.fn() }, dependencies: {
+  const logger = { log: jest.fn(), error: jest.fn() };
+  const app = createApp({ environment, logger, dependencies: {
     prisma: { $queryRaw: jest.fn().mockResolvedValue([{ '?column?': 1 }]) } as never,
     jwt: { verifyAsync: jest.fn() } as never,
     auth: auth as never,
@@ -35,5 +36,12 @@ describe('documented route parity', () => {
         expect(response.status).not.toBe(404);
       }
     }
+  });
+
+  it('logs matched route templates without query strings', async () => {
+    await request(app).get('/properties?search=private').expect(401);
+    const entry = JSON.parse(logger.log.mock.calls.at(-1)?.[0] as string);
+    expect(entry.path).toBe('/properties/');
+    expect(entry.path).not.toContain('private');
   });
 });

@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '../lib/http-errors';
 import { CustomersService } from './customers.service';
 import { Prisma } from '@prisma/client';
 
@@ -9,14 +9,16 @@ describe('CustomersService', () => {
       findFirst: jest.fn(),
       create: jest.fn(),
       updateMany: jest.fn(),
+      count: jest.fn(),
     },
+    $transaction: jest.fn((queries: Promise<unknown>[]) => Promise.all(queries)),
   };
   const service = new CustomersService(prisma);
   beforeEach(() => jest.clearAllMocks());
 
   it('searches customer name, phone, and email inside the current business', async () => {
     prisma.customer.findMany.mockResolvedValue([]);
-    await service.list('business-a', 'Ada');
+    await service.list('business-a', { q: 'Ada' });
     expect(prisma.customer.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {

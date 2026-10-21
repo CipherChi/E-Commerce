@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException } from '../lib/http-errors';
 import { BookingStatus, Prisma, RoomStatus, SalePaymentStatus, SaleStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { deriveInvoiceFinancials } from '../finance/invoice-financials';
@@ -8,7 +8,7 @@ const decimal = (value: Prisma.Decimal | null | undefined) => value ?? new Prism
 const lagosDate = (date: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Lagos', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
 const dateOnly = (key: string) => new Date(`${key}T00:00:00.000Z`);
 
-@Injectable()
+
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 

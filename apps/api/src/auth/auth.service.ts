@@ -1,19 +1,18 @@
-import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { JwtService } from '@nestjs/jwt';
+import { ConflictException, UnauthorizedException } from '../lib/http-errors';
 import * as argon2 from 'argon2';
 import { createHash, randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { JwtPort } from '../lib/jwt';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 
-@Injectable()
+
 export class AuthService {
   private readonly dummyPasswordHash = argon2.hash('invalid-account-password-placeholder');
   constructor(
     private prisma: PrismaService,
-    private jwt: JwtService,
-    private config: ConfigService,
+    private jwt: JwtPort,
+    private config: { getOrThrow(key: string): string },
   ) {}
 
   async register(dto: RegisterDto) {
@@ -30,15 +29,19 @@ export class AuthService {
     const normalizedEmail = dto.email.toLowerCase();
     const user = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
     const now = Date.now();
-    const key = createHash('sha256').update(`login-ip\0${user?.id ?? normalizedEmail}\0${clientIp}`).digest('hex');
+    const key = createHash('sha256')
+      .update(`login-ip\0${user?.id ?? normalizedEmail}\0${clientIp}`)
+      .digest('hex');
     // Email identity provides a second counter shared across client IPs; only its hash is stored.
-    const accountKey = createHash('sha256').update(`login-account\0${normalizedEmail}`).digest('hex');
+    const accountKey = createHash('sha256')
+      .update(`login-account\0${normalizedEmail}`)
+      .digest('hex');
     const [attempt, accountAttempt] = await Promise.all([
       this.prisma.loginAttempt.findUnique({ where: { key } }),
       this.prisma.loginAttempt.findUnique({ where: { key: accountKey } }),
     ]);
-    const locked = [attempt, accountAttempt].some(
-      (entry) => Boolean(entry?.lockedUntil && entry.lockedUntil.getTime() > now),
+    const locked = [attempt, accountAttempt].some((entry) =>
+      Boolean(entry?.lockedUntil && entry.lockedUntil.getTime() > now),
     );
     const passwordMatches = await argon2.verify(
       user && !locked ? user.passwordHash : await this.dummyPasswordHash,
@@ -97,10 +100,17 @@ export class AuthService {
     if (
       !user?.isActive ||
       (payload as { tokenVersion?: number }).tokenVersion !== (user.tokenVersion ?? 0) ||
-      !user.refreshTokenHash ||
-      !(await argon2.verify(user.refreshTokenHash, token))
-    )
+      !user.refreshTokenHash
+    ) {
       throw new UnauthorizedException('Invalid refresh token');
+    }
+    if (!(await argon2.verify(user.refreshTokenHash, token))) {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { refreshTokenHash: null, tokenVersion: { increment: 1 } },
+      });
+      throw new UnauthorizedException('Invalid refresh token');
+    }
     return this.issueTokens(user);
   }
 

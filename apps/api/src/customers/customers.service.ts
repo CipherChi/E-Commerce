@@ -1,11 +1,11 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '../lib/http-errors';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { Prisma } from '@prisma/client';
 import { deriveInvoiceFinancials } from '../finance/invoice-financials';
 
-@Injectable()
+
 export class CustomersService {
   constructor(private prisma: PrismaService) {}
 

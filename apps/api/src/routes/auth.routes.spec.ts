@@ -17,7 +17,7 @@ describe('Express auth routes', () => {
     businessMember: { findFirst: jest.fn().mockResolvedValue(null) },
     user: { findUnique: jest.fn().mockResolvedValue({ isActive: true, tokenVersion: 0 }) },
   };
-  const app = () => createApp({ environment, logger: { log: jest.fn(), error: jest.fn() }, dependencies: { auth: auth as never, jwt: jwt as never, prisma: prisma as never } });
+  const app = () => createApp({ environment, logger: { log: jest.fn(), error: jest.fn() }, dependencies: { auth: auth as never, jwt: jwt as never, prisma: prisma as never, controllers: {} as never } as never });
 
   beforeEach(() => jest.clearAllMocks());
 

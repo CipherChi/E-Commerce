@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '../lib/http-errors';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantRecordsService } from './tenant-records.service';
 

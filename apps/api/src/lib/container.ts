@@ -1,5 +1,5 @@
-import { JwtService } from '@nestjs/jwt';
 import { PrismaClient } from '@prisma/client';
+import { JwtAdapter } from './jwt';
 import { ActivityLogsController } from '../activity-logs/activity-logs.controller';
 import { AuthService } from '../auth/auth.service';
 import { BookingsController } from '../bookings/bookings.controller';
@@ -31,7 +31,7 @@ import { TenantRecordsService } from '../tenant-records/tenant-records.service';
 
 export function createContainer(env: NodeJS.ProcessEnv) {
   const prisma = new PrismaClient();
-  const jwt = new JwtService();
+  const jwt = new JwtAdapter();
   const config = { getOrThrow: (key: string) => env[key] } as never;
   const auth = new AuthService(prisma as never, jwt, config);
   const catalog = new CatalogService(prisma as never);

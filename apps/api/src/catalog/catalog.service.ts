@@ -1,9 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '../lib/http-errors';
 import { BusinessModuleType, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCatalogItemDto, UpdateCatalogItemDto } from './dto/catalog.dto';
 const labels: Record<BusinessModuleType, string> = { LODGING: 'Lodging', FOOD: 'Food', BEVERAGE: 'Beverage', GYM: 'Gym' };
-@Injectable()
+
 export class CatalogService {
   constructor(private prisma: PrismaService) {}
   async list(businessId: string, filters: { module?: BusinessModuleType; category?: string; is_stockable?: string; is_archived?: string; q?: string; page?: number; pageSize?: number }) {

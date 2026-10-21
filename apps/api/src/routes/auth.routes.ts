@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import { JwtService } from '@nestjs/jwt';
 import { PrismaClient } from '@prisma/client';
 import { AuthService } from '../auth/auth.service';
 import { asyncHandler } from '../lib/async-handler';
@@ -7,6 +6,7 @@ import { authenticate, requireOrigin } from '../middleware/auth';
 import { validateBody } from '../middleware/validate';
 import { loginSchema, registerSchema } from '../validation/auth.schemas';
 import { rateLimit } from '../middleware/rate-limit';
+import { JwtPort } from '../lib/jwt';
 
 const cookieName = 'staywise_rt';
 const cookieMaxAge = 7 * 24 * 60 * 60 * 1000;
@@ -14,7 +14,7 @@ function cookieOptions(maxAge = true) {
   return { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict' as const, path: '/auth', ...(maxAge ? { maxAge: cookieMaxAge } : {}) };
 }
 
-export function createAuthRouter(auth: AuthService, jwt: JwtService, prisma: PrismaClient, accessSecret: string, webOrigin: string, redisUrl?: string): Router {
+export function createAuthRouter(auth: AuthService, jwt: JwtPort, prisma: PrismaClient, accessSecret: string, webOrigin: string, redisUrl?: string): Router {
   const router = Router();
   router.post('/register', rateLimit(5, 60_000, redisUrl, 'auth:register'), validateBody(registerSchema), asyncHandler(async (req, res) => {
     const session = await auth.register(req.validatedBody as never);

@@ -2,7 +2,7 @@ import { Prisma } from '@prisma/client';
 import { formatReceiptMoney } from '@hotel/shared-types/src/money.js';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReceiptsService } from './receipts.service';
-import { NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '../lib/http-errors';
 
 describe('ReceiptsService', () => {
   const record = {

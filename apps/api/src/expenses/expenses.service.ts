@@ -1,8 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '../lib/http-errors';
 import { PrismaService } from '../prisma/prisma.service';
 import { ExpenseDto, CategoryDto } from './dto/expense.dto';
 import { Prisma } from '@prisma/client';
-@Injectable()
+
 export class ExpensesService {
  constructor(private prisma: PrismaService) {}
  async categories(businessId: string, archived = false) { for (const name of ['Electricity','Staff','Maintenance','Other']) await this.prisma.expenseCategory.upsert({where:{businessId_name:{businessId,name}},update:{},create:{businessId,name}}); return this.prisma.expenseCategory.findMany({ where: { businessId, isArchived: archived }, orderBy: { name: 'asc' } }); }

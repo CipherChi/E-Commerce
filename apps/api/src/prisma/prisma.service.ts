@@ -1,12 +1,4 @@
-import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 
-@Injectable()
-export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
-  async onModuleInit() {
-    await this.$connect();
-  }
-  async onModuleDestroy() {
-    await this.$disconnect();
-  }
-}
+/** Prisma lifecycle is owned by server.ts, not a framework hook. */
+export class PrismaService extends PrismaClient {}

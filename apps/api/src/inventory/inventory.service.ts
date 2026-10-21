@@ -1,10 +1,10 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '../lib/http-errors';
 import { Prisma, StockMovementType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CatalogService } from '../catalog/catalog.service';
 import { MovementQueryDto, StockAdjustmentDto, StockMovementDto } from './dto/movement.dto';
 
-@Injectable()
+
 export class InventoryService {
   constructor(
     private prisma: PrismaService,
