@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { FormEvent, useState } from 'react';
+import { setAccessToken } from '@/lib/api';
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
@@ -19,6 +20,7 @@ export default function RegisterPage() {
     try {
       const response = await fetch(`${apiUrl}/auth/register`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: form.get('name'),
@@ -33,9 +35,7 @@ export default function RegisterPage() {
           typeof result.message === 'string' ? result.message : 'Unable to create account',
         );
       sessionStorage.setItem('staywise.primaryType', String(form.get('primaryType')));
-      sessionStorage.setItem('staywise.accessToken', result.accessToken);
-      sessionStorage.setItem('staywise.refreshToken', result.refreshToken);
-      sessionStorage.setItem('staywise.user', JSON.stringify(result.user));
+      setAccessToken(result.accessToken);
       router.replace('/business');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to create account. Try again.');
@@ -76,8 +76,17 @@ export default function RegisterPage() {
           </label>
           <label className="block text-sm font-medium">
             Primary business type
-            <select className="mt-2 w-full rounded-xl border border-ink/15 px-4 py-3" name="primaryType" required defaultValue="HOTEL">
-              <option value="HOTEL">Hotel</option><option value="APARTMENT">Apartment</option><option value="RESTAURANT">Restaurant</option><option value="GYM">Gym</option><option value="SUPERMARKET">Supermarket</option>
+            <select
+              className="mt-2 w-full rounded-xl border border-ink/15 px-4 py-3"
+              name="primaryType"
+              required
+              defaultValue="HOTEL"
+            >
+              <option value="HOTEL">Hotel</option>
+              <option value="APARTMENT">Apartment</option>
+              <option value="RESTAURANT">Restaurant</option>
+              <option value="GYM">Gym</option>
+              <option value="SUPERMARKET">Supermarket</option>
             </select>
           </label>
           <label className="block text-sm font-medium">

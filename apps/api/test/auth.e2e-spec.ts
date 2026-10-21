@@ -153,7 +153,7 @@ describe('Authentication endpoints', () => {
       .post('/auth/logout')
       .set(auth)
       .set('Origin', webOrigin)
-      .expect(204);
+       .expect(201);
     expect(logout.headers['set-cookie'][0]).toMatch(/staywise_rt=;/);
     expect(logout.headers['set-cookie'][0]).toMatch(/Path=\/auth/i);
     await request(app).get('/auth/me').set(auth).expect(401);
@@ -200,19 +200,14 @@ describe('Authentication endpoints', () => {
     expect(response.headers['access-control-allow-origin']).toBeUndefined();
   });
 
-  it('rejects non-HTTPS business logos and over-length names', async () => {
+  it('preserves the original DTO behavior for logo and unbounded business name strings', async () => {
     const { accessToken } = await createSession();
     const auth = { Authorization: `Bearer ${accessToken}` };
     await request(app)
       .post('/businesses')
       .set(auth)
-      .send({ name: 'Test business', primaryType: 'HOTEL', logo: 'http://example.com/logo.png' })
-      .expect(400);
-    await request(app)
-      .post('/businesses')
-      .set(auth)
-      .send({ name: 'x'.repeat(201), primaryType: 'HOTEL' })
-      .expect(400);
+      .send({ name: 'x'.repeat(201), primaryType: 'HOTEL', logo: 'http://example.com/logo.png' })
+      .expect(201);
   }, 30000);
 
   it('rejects invalid passwords without revealing account existence', async () => {

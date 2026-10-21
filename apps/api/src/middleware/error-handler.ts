@@ -13,9 +13,9 @@ export function errorHandler(logger: Pick<Console, 'error'> = console): ErrorReq
       status = 400;
       message = {
         statusCode: 400,
-        message: error.issues.map((issue) => issue.code === 'unrecognized_keys'
+        message: error.issues.flatMap((issue) => issue.code === 'unrecognized_keys'
           ? issue.keys.map((key) => `property ${key} should not exist`)
-          : `${issue.path.join('.')}${issue.path.length ? ' ' : ''}${issue.message}`),
+          : [`${issue.path.join('.')}${issue.path.length ? ' ' : ''}${issue.message}`]),
         error: 'Bad Request',
       };
     } else if (typeof error.getStatus === 'function') {
@@ -23,12 +23,12 @@ export function errorHandler(logger: Pick<Console, 'error'> = console): ErrorReq
       message = typeof error.getResponse === 'function' ? error.getResponse() : error.message;
     } else if (typeof error.statusCode === 'number' && error.statusCode >= 400 && error.statusCode < 600) {
       status = error.statusCode;
-      message = error.response ?? error.message ?? message;
+      message = status >= 500 ? 'Internal server error' : error.response ?? error.message ?? message;
     }
 
     if (status >= 500) {
       const errorCode = (error as HttpErrorLike & { code?: string }).code;
-      logger.error(JSON.stringify({ event: 'http_exception', requestId: req.requestId ?? null, method: req.method, path: req.requestLogPath ?? req.path, statusCode: status, errorName: error.name, ...(errorCode ? { errorCode } : {}) }));
+      logger.error(JSON.stringify({ event: 'http_exception', requestId: req.requestId ?? null, method: req.method, path: req.requestLogPath ?? 'unmatched', statusCode: status, errorName: error.name, ...(errorCode ? { errorCode } : {}) }));
     }
     res.status(status).json({
       statusCode: status,

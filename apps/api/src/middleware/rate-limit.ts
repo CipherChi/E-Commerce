@@ -1,5 +1,6 @@
 import { NextFunction, Request, RequestHandler, Response } from 'express';
 import { createClient, RedisClientType } from 'redis';
+import { ServiceUnavailableException } from '../lib/http-errors';
 
 type Bucket = { expiresAt: number; count: number };
 const localBuckets = new Map<string, Bucket>();
@@ -32,7 +33,7 @@ export function rateLimit(limit: number, ttlMs: number, redisUrl?: string, prefi
       if (count > limit) return next(Object.assign(new Error('Too Many Requests'), { statusCode: 429, response: { statusCode: 429, message: 'Too Many Requests' } }));
       next();
     } catch {
-      next(Object.assign(new Error('Rate limiting is unavailable'), { statusCode: 503, response: { statusCode: 503, message: 'Rate limiting is unavailable' } }));
+      next(new ServiceUnavailableException('Rate limiting is unavailable'));
     }
   };
 }

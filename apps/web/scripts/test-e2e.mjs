@@ -46,7 +46,7 @@ const env = {
   ...process.env,
   DATABASE_URL: testUrl,
   TENANT_TEST_DATABASE_URL: testUrl,
-  NEXT_PUBLIC_API_URL: 'http://127.0.0.1:3001',
+  NEXT_PUBLIC_API_URL: process.env.PLAYWRIGHT_API_URL ?? 'http://127.0.0.1:3001',
   JWT_ACCESS_SECRET: process.env.JWT_ACCESS_SECRET ?? 'playwright-retail-access-secret',
   JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET ?? 'playwright-retail-refresh-secret',
 };

@@ -2,13 +2,16 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { apiRequest } from '@/lib/api';
+import { refreshAccessToken } from '@/lib/api';
 import { getMobileNavigationLinks } from '@/lib/auth-navigation.mjs';
 
 type Profile = { role: string | null; businessId: string | null };
 type Module = { module: string; isEnabled: boolean };
 
 export function PwaShell() {
+  const pathname = usePathname();
   const [install, setInstall] = useState<any>(null);
   const [online, setOnline] = useState(true);
   const [update, setUpdate] = useState<ServiceWorkerRegistration | null>(null);
@@ -61,12 +64,21 @@ export function PwaShell() {
   }, []);
 
   useEffect(() => {
-    if (!sessionStorage.getItem('staywise.accessToken')) return;
-    void apiRequest<Profile>('/auth/me')
+    if (
+      pathname === '/' ||
+      pathname === '/login' ||
+      pathname === '/register' ||
+      pathname.startsWith('/public/receipt/')
+    )
+      return;
+    void refreshAccessToken()
+      .then((token) => {
+        if (!token) return null;
+        return apiRequest<Profile>('/auth/me');
+      })
       .then(async (profile) => {
-        const modules = profile.businessId
-          ? await apiRequest<Module[]>('/businesses/modules')
-          : [];
+        if (!profile) return;
+        const modules = profile.businessId ? await apiRequest<Module[]>('/businesses/modules') : [];
         setMobileLinks(
           getMobileNavigationLinks(
             profile.role,
@@ -75,11 +87,14 @@ export function PwaShell() {
         );
       })
       .catch(() => setMobileLinks([]));
-  }, []);
+  }, [pathname]);
 
   return (
     <>
-      <div aria-live="polite" className="fixed left-3 right-3 top-3 z-50 flex flex-col items-center gap-2">
+      <div
+        aria-live="polite"
+        className="fixed left-3 right-3 top-3 z-50 flex flex-col items-center gap-2"
+      >
         {!online && (
           <p className="rounded-xl bg-amber-100 px-4 py-2 text-sm text-amber-950 shadow">
             You’re offline — some features may not work.
@@ -115,7 +130,11 @@ export function PwaShell() {
           style={{ gridTemplateColumns: `repeat(${mobileLinks.length}, minmax(0, 1fr))` }}
         >
           {mobileLinks.map(([href, label]) => (
-            <Link key={href} href={href} className="flex min-h-11 items-center justify-center px-1 py-3 text-ink/75">
+            <Link
+              key={href}
+              href={href}
+              className="flex min-h-11 items-center justify-center px-1 py-3 text-ink/75"
+            >
               {label}
             </Link>
           ))}

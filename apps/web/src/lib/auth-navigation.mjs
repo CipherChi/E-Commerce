@@ -78,22 +78,12 @@ export function getNavigationLinks(role, enabledModules = []) {
   return links.filter(
     (item) =>
       (!item[2] || enabled.has(item[2])) &&
-      (item[1] !== '/inventory' || ['FOOD', 'BEVERAGE', 'GYM'].some((module) => enabled.has(module))),
+      (item[1] !== '/inventory' ||
+        ['FOOD', 'BEVERAGE', 'GYM'].some((module) => enabled.has(module))),
   );
 }
 
 export function getMobileNavigationLinks(role, enabledModules = []) {
   const allowed = new Set(getNavigationLinks(role, enabledModules).map(([, href]) => href));
   return mobileOrder.filter(([href]) => allowed.has(href));
-}
-
-export function clearAuthSession(storage) {
-  storage.removeItem('staywise.accessToken');
-  storage.removeItem('staywise.refreshToken');
-  storage.removeItem('staywise.user');
-}
-
-export function clearAuthSessionAndRedirect(storage, replace) {
-  clearAuthSession(storage);
-  replace('/login');
 }

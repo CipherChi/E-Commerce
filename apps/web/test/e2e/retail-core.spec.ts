@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
-const apiUrl = process.env.API_URL ?? 'http://127.0.0.1:3001';
+const apiUrl = process.env.API_URL ?? process.env.PLAYWRIGHT_API_URL ?? 'http://127.0.0.1:3001';
 const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 test('retail sale, receipt, PDF, tenant isolation, and idempotent replay', async ({
@@ -29,7 +29,14 @@ test('retail sale, receipt, PDF, tenant isolation, and idempotent replay', async
   await page.getByLabel('Email', { exact: true }).fill(email);
   await page.getByLabel('Primary business type').selectOption('SUPERMARKET');
   await page.getByLabel('Password', { exact: true }).fill('RetailFlow!2026');
+  const registrationResponsePromise = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      new URL(response.url()).pathname === '/auth/register',
+  );
   await page.getByRole('button', { name: 'Create account' }).click();
+  const registrationResponse = await registrationResponsePromise;
+  const registration = (await registrationResponse.json()) as { accessToken: string };
 
   await expect(page).toHaveURL(/\/business$/);
   await page.getByLabel('Business name').fill(businessName);
@@ -48,9 +55,8 @@ test('retail sale, receipt, PDF, tenant isolation, and idempotent replay', async
   ).toBe(201);
   await expect(page).toHaveURL(/\/dashboard$/);
 
-  const token = await page.evaluate(() => sessionStorage.getItem('staywise.accessToken'));
-  expect(token).toBeTruthy();
-  const authHeaders = { Authorization: `Bearer ${token}` };
+  expect(registration.accessToken).toBeTruthy();
+  const authHeaders = { Authorization: `Bearer ${registration.accessToken}` };
 
   await page.goto('/products');
   const productForm = page
@@ -66,8 +72,10 @@ test('retail sale, receipt, PDF, tenant isolation, and idempotent replay', async
 
   const catalogResponse = await request.get(`${apiUrl}/catalog`, { headers: authHeaders });
   expect(catalogResponse.ok()).toBeTruthy();
-  const catalog = (await catalogResponse.json()) as Array<{ id: string; name: string }>;
-  const product = catalog.find((item) => item.name === productName);
+  const catalog = (await catalogResponse.json()) as {
+    data: Array<{ id: string; name: string }>;
+  };
+  const product = catalog.data.find((item) => item.name === productName);
   expect(product).toBeTruthy();
 
   await page.goto('/inventory');
@@ -83,19 +91,22 @@ test('retail sale, receipt, PDF, tenant isolation, and idempotent replay', async
   await page.getByRole('button', { name: 'Save guest' }).click();
   await expect(page.getByRole('link', { name: customerName })).toBeVisible();
   const customersResponse = await request.get(`${apiUrl}/customers`, { headers: authHeaders });
-  const customers = (await customersResponse.json()) as Array<{ id: string; name: string }>;
-  const customer = customers.find((entry) => entry.name === customerName);
+  const customers = (await customersResponse.json()) as {
+    data: Array<{ id: string; name: string }>;
+  };
+  const customer = customers.data.find((entry) => entry.name === customerName);
   expect(customer).toBeTruthy();
 
   await page.goto('/sales');
   const saleForm = page
     .locator('form')
     .filter({ has: page.getByRole('heading', { name: 'New sale' }) });
-  await saleForm.getByRole('combobox').nth(0).selectOption(customer!.id);
+  await saleForm.getByRole('searchbox', { name: 'Customer (optional)' }).fill(customerName);
+  await saleForm.getByRole('button', { name: customerName }).click();
   await page.getByRole('button', { name: '+ Add item' }).click();
-  await saleForm.getByRole('combobox').nth(1).selectOption(product!.id);
+  await expect(saleForm.getByText(productName, { exact: true })).toBeVisible();
   await saleForm.getByLabel('Qty', { exact: true }).fill('3');
-  await saleForm.getByRole('combobox').nth(3).selectOption('PARTIAL');
+  await saleForm.getByLabel('Payment status').selectOption('PARTIAL');
   await saleForm.getByLabel('Amount received').fill('1000');
   const saleResponsePromise = page.waitForResponse(
     (response) =>
@@ -107,7 +118,7 @@ test('retail sale, receipt, PDF, tenant isolation, and idempotent replay', async
   const sale = (await saleResponse.json()) as { id: string; receiptNumber: string; total: string };
   expect(saleRequest?.key).toBeTruthy();
   await expect(page.getByRole('link', { name: 'View receipt' })).toBeVisible();
-  await expect(page.getByText('1 recent sales')).toBeVisible();
+  await expect(page.getByText('1 sales · Page 1 of 1')).toBeVisible();
 
   const currentResponse = await request.get(`${apiUrl}/inventory/${product!.id}/current`, {
     headers: authHeaders,
@@ -197,9 +208,9 @@ test('retail sale, receipt, PDF, tenant isolation, and idempotent replay', async
   expect(replayedSale.id).toBe(sale.id);
   expect(replayedSale.receiptNumber).toBe(sale.receiptNumber);
   const salesResponse = await request.get(`${apiUrl}/sales`, { headers: authHeaders });
-  const sales = (await salesResponse.json()) as Array<{ id: string }>;
-  expect(sales).toHaveLength(1);
-  expect(sales[0].id).toBe(sale.id);
+  const sales = (await salesResponse.json()) as { data: Array<{ id: string }> };
+  expect(sales.data).toHaveLength(1);
+  expect(sales.data[0].id).toBe(sale.id);
   expect(
     (
       await (

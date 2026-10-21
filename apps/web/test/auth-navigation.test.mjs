@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  clearAuthSessionAndRedirect,
   getMobileNavigationLinks,
   getNavigationLinks,
   safeReturnPath,
@@ -42,25 +41,16 @@ test('sidebar and mobile links share member-role and enabled-module filtering', 
   const staffHrefs = staffLinks.map(([, href]) => href);
   assert.deepEqual(staffHrefs, ['/dashboard', '/sales/new', '/sales', '/receipts', '/customers']);
   const staffMobileHrefs = getMobileNavigationLinks('STAFF', ['FOOD']).map(([href]) => href);
-  assert.deepEqual(staffMobileHrefs, ['/dashboard', '/sales/new', '/sales', '/receipts', '/customers']);
+  assert.deepEqual(staffMobileHrefs, [
+    '/dashboard',
+    '/sales/new',
+    '/sales',
+    '/receipts',
+    '/customers',
+  ]);
   assert(!staffMobileHrefs.includes('/expenses'));
   assert(!staffMobileHrefs.includes('/inventory'));
 
   assert(getNavigationLinks('MANAGER', ['LODGING']).some(([, href]) => href === '/bookings'));
   assert(!getNavigationLinks('MANAGER', []).some(([, href]) => href === '/bookings'));
-});
-
-test('failed auth profile lookup clears stored tokens and redirects to login', () => {
-  const values = new Map([
-    ['staywise.accessToken', 'expired'],
-    ['staywise.refreshToken', 'expired-refresh'],
-    ['staywise.user', '{"id":"u1"}'],
-  ]);
-  const storage = { removeItem: (key) => values.delete(key) };
-  const routes = [];
-
-  clearAuthSessionAndRedirect(storage, (path) => routes.push(path));
-
-  assert.equal(values.size, 0);
-  assert.deepEqual(routes, ['/login']);
 });

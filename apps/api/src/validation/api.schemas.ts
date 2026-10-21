@@ -2,47 +2,59 @@ import {
   BookingSource, BookingStatus, BusinessModuleType, BusinessType, PaymentMethod, PropertyType,
   RoomStatus, SalePaymentStatus,
 } from '@prisma/client';
+import validator = require('validator');
 import { z } from 'zod';
 
 const decimal = z.string().regex(/^\d+(\.\d{1,2})?$/);
-const date = z.string().regex(/^\d{4}-\d{2}-\d{2}(?:T.*)?$/);
-const page = z.preprocess((value) => value === undefined ? 1 : Number(value), z.number().int().min(1));
-const sizedPage = (fallback: number) => z.preprocess((value) => value === undefined ? fallback : Number(value), z.number().int().min(1).max(100));
-const boolTransform = z.preprocess((value) => typeof value === 'string' ? Boolean(value) : value, z.boolean());
-const optionalText = (max: number) => z.string().max(max).optional();
-const positiveInteger = z.preprocess((value) => Number(value), z.number().int().min(1));
+// Mirrors IsOptional: class-validator skips both undefined and null.
+const optional = (schema: z.ZodTypeAny) => schema.nullable().optional();
+const optionalText = () => optional(z.string());
 const body = (shape: z.ZodRawShape) => z.object(shape).strict();
+const email = z.string().refine(validator.isEmail, 'must be an email');
+const page = z.preprocess((value) => value === undefined ? 1 : value === null ? null : Number(value), z.number().int().min(1).nullable());
+const sizedPage = (fallback: number) => z.preprocess(
+  (value) => value === undefined ? fallback : value === null ? null : Number(value),
+  z.number().int().min(1).max(100).nullable(),
+);
+// class-transformer applies Number/Boolean before class-validator checks DTO fields.
+const positiveInteger = z.preprocess((value) => value === null || value === undefined ? value : Number(value), z.number().int().min(1));
+const integer = z.preprocess((value) => value === null || value === undefined ? value : Number(value), z.number().int());
+const nonNegativeInteger = z.preprocess((value) => value === null || value === undefined ? value : Number(value), z.number().int().min(0));
+const boolTransform = z.preprocess((value) => value === null || value === undefined ? value : typeof value === 'string' ? Boolean(value) : value, z.boolean());
+
+const date = z.string().refine(validator.isISO8601, 'must be a valid ISO 8601 date string');
+const strictDate = z.string().refine((value) => validator.isISO8601(value, { strict: true }), 'must be a strict ISO 8601 date string');
 
 export const apiValidation: Record<string, { body?: z.ZodTypeAny; query?: z.ZodTypeAny }> = {
-  'POST /businesses': { body: body({ name: z.string().min(1).max(200), primaryType: z.nativeEnum(BusinessType), phone: z.string().max(50).optional(), address: z.string().max(500).optional(), logo: z.string().url().max(2048).refine((v) => v.startsWith('https://')).optional() }) },
+  'POST /businesses': { body: body({ name: z.string().min(1), primaryType: z.nativeEnum(BusinessType), phone: optionalText(), address: optionalText(), logo: optionalText() }) },
   'PATCH /businesses/modules': { body: body({ module: z.nativeEnum(BusinessModuleType), isEnabled: z.boolean() }) },
-  'POST /businesses/staff': { body: body({ name: z.string().max(200), email: z.string().email().max(254), password: z.string().min(8) }) },
-  'PATCH /businesses/staff/:userId': { body: body({ isActive: z.boolean() }) },
-  'POST /properties': { body: body({ name: z.string().min(1).max(200), address: z.string().min(1).max(500), type: z.nativeEnum(PropertyType).optional() }) },
-  'PATCH /properties/:id': { body: body({ name: z.string().min(1).max(200).optional(), address: z.string().min(1).max(500).optional(), type: z.nativeEnum(PropertyType).optional() }) },
-  'POST /properties/:propertyId/rooms': { body: body({ label: z.string().min(1).max(200), type: z.string().min(1).max(100), capacity: positiveInteger, basePrice: decimal, status: z.nativeEnum(RoomStatus).optional() }) },
-  'PATCH /properties/:propertyId/rooms/:roomId': { body: body({ label: z.string().min(1).max(200).optional(), type: z.string().min(1).max(100).optional(), capacity: positiveInteger.optional(), basePrice: decimal.optional(), status: z.nativeEnum(RoomStatus).optional() }) },
-  'POST /customers': { body: body({ name: z.string().min(1).max(200), phone: z.string().min(3).max(50), email: z.string().email().max(254).optional(), idType: optionalText(100), idNumber: optionalText(100), notes: optionalText(2000) }) },
-  'PATCH /customers/:id': { body: body({ name: z.string().min(1).max(200).optional(), phone: z.string().min(3).max(50).optional(), email: z.string().email().max(254).optional(), idType: optionalText(100), idNumber: optionalText(100), notes: optionalText(2000) }) },
-  'GET /customers': { query: body({ q: z.string().max(200).optional(), page, pageSize: sizedPage(25) }) },
-  'POST /catalog': { body: body({ name: z.string().max(200), module: z.nativeEnum(BusinessModuleType), category: optionalText(200), costPrice: decimal.optional(), sellingPrice: decimal.optional(), normalRate: decimal.optional(), partyRate: decimal.optional(), monthlyPrice: decimal.optional(), isStockable: boolTransform.optional(), lowStockThreshold: z.preprocess((v) => v === undefined ? undefined : Number(v), z.number().int().min(0)).optional() }) },
-  'PATCH /catalog/:id': { body: body({ name: z.string().max(200).optional(), module: z.nativeEnum(BusinessModuleType).optional(), category: optionalText(200), costPrice: decimal.optional(), sellingPrice: decimal.optional(), normalRate: decimal.optional(), partyRate: decimal.optional(), monthlyPrice: decimal.optional(), isStockable: boolTransform.optional(), lowStockThreshold: z.preprocess((v) => Number(v), z.number().int().min(0)).optional() }) },
-  'GET /catalog': { query: body({ module: z.nativeEnum(BusinessModuleType).optional(), category: z.string().max(200).optional(), is_stockable: z.string().optional(), is_archived: z.string().optional(), q: z.string().max(200).optional(), page, pageSize: sizedPage(25) }) },
-  'POST /inventory/stock-in': { body: body({ productId: z.string(), quantity: positiveInteger, reason: optionalText(2000) }) },
-  'POST /inventory/stock-out': { body: body({ productId: z.string(), quantity: positiveInteger, reason: optionalText(2000) }) },
-  'POST /inventory/adjustments': { body: body({ productId: z.string(), quantity: z.preprocess((v) => Number(v), z.number().int()), reason: z.string().max(2000) }) },
-  'GET /inventory/:productId/movements': { query: body({ type: z.string().optional(), from: date.optional(), to: date.optional(), page, limit: z.preprocess((v) => v === undefined ? 20 : Number(v), z.number().int().min(1)) }) },
-  'POST /sales': { body: body({ customerId: z.string().optional(), guestName: z.string().max(200).optional(), paymentMethod: z.nativeEnum(PaymentMethod), paymentStatus: z.nativeEnum(SalePaymentStatus), amountPaid: decimal.optional(), items: z.array(body({ productId: z.string(), quantity: positiveInteger, pricingOption: z.enum(['NORMAL', 'PARTY']).optional() })).min(1) }) },
-  'GET /sales': { query: body({ from: z.string().optional(), to: z.string().optional(), customerId: z.string().optional(), paymentMethod: z.string().optional(), status: z.string().optional(), paymentStatus: z.string().optional(), recordedById: z.string().optional(), q: z.string().max(200).optional(), page, pageSize: sizedPage(25) }) },
-  'POST /expenses/categories': { body: body({ name: z.string().min(1).max(200) }) },
-  'PATCH /expenses/categories/:id': { body: body({ name: z.string().min(1).max(200) }) },
-  'POST /expenses': { body: body({ categoryId: z.string(), amount: decimal, description: optionalText(2000), expenseDate: z.string().datetime().or(date) }) },
-  'PATCH /expenses/:id': { body: body({ categoryId: z.string(), amount: decimal, description: optionalText(2000), expenseDate: z.string().datetime().or(date) }) },
-  'POST /bookings': { body: body({ roomId: z.string().min(1), customerId: z.string().min(1), checkIn: date, checkOut: date, source: z.nativeEnum(BookingSource).optional() }) },
-  'PATCH /bookings/:id': { body: body({ status: z.nativeEnum(BookingStatus).optional(), roomId: z.string().min(1).optional(), customerId: z.string().min(1).optional(), checkIn: date.optional(), checkOut: date.optional(), source: z.nativeEnum(BookingSource).optional() }) },
-  'GET /bookings': { query: body({ from: date.optional(), to: date.optional(), status: z.nativeEnum(BookingStatus).optional(), roomId: z.string().optional(), customerId: z.string().optional(), page, pageSize: sizedPage(20) }) },
-  'POST /bookings/:bookingId/payments': { body: body({ amount: decimal, method: z.nativeEnum(PaymentMethod), reference: optionalText(200) }) },
-  'POST /invoices/:id/payments': { body: body({ amount: decimal, method: z.nativeEnum(PaymentMethod), reference: optionalText(200) }) },
+  'POST /businesses/staff': { body: body({ name: z.string(), email, password: z.string().min(8) }) },
+  // The original inline object parameter has no class-validator metatype, so ValidationPipe did not validate it.
+  'POST /properties': { body: body({ name: z.string().min(1), address: z.string().min(1), type: optional(z.nativeEnum(PropertyType)) }) },
+  'PATCH /properties/:id': { body: body({ name: optional(z.string().min(1)), address: optional(z.string().min(1)), type: optional(z.nativeEnum(PropertyType)) }) },
+  'POST /properties/:propertyId/rooms': { body: body({ label: z.string().min(1), type: z.string().min(1), capacity: positiveInteger, basePrice: decimal, status: optional(z.nativeEnum(RoomStatus)) }) },
+  'PATCH /properties/:propertyId/rooms/:roomId': { body: body({ label: optional(z.string().min(1)), type: optional(z.string().min(1)), capacity: optional(positiveInteger), basePrice: optional(decimal), status: optional(z.nativeEnum(RoomStatus)) }) },
+  'POST /customers': { body: body({ name: z.string().min(1), phone: z.string().min(3), email: optional(email), idType: optionalText(), idNumber: optionalText(), notes: optionalText() }) },
+  'PATCH /customers/:id': { body: body({ name: optional(z.string().min(1)), phone: optional(z.string().min(3)), email: optional(email), idType: optionalText(), idNumber: optionalText(), notes: optionalText() }) },
+  'GET /customers': { query: body({ q: optionalText(), page, pageSize: sizedPage(25) }) },
+  'POST /catalog': { body: body({ name: z.string(), module: z.nativeEnum(BusinessModuleType), category: optionalText(), costPrice: optional(decimal), sellingPrice: optional(decimal), normalRate: optional(decimal), partyRate: optional(decimal), monthlyPrice: optional(decimal), isStockable: optional(boolTransform), lowStockThreshold: optional(nonNegativeInteger) }) },
+  'PATCH /catalog/:id': { body: body({ name: optionalText(), module: optional(z.nativeEnum(BusinessModuleType)), category: optionalText(), costPrice: optional(decimal), sellingPrice: optional(decimal), normalRate: optional(decimal), partyRate: optional(decimal), monthlyPrice: optional(decimal), isStockable: optional(boolTransform), lowStockThreshold: optional(nonNegativeInteger) }) },
+  'GET /catalog': { query: body({ module: optional(z.nativeEnum(BusinessModuleType)), category: optionalText(), is_stockable: optionalText(), is_archived: optionalText(), q: optionalText(), page, pageSize: sizedPage(25) }) },
+  'POST /inventory/stock-in': { body: body({ productId: z.string(), quantity: positiveInteger, reason: optionalText() }) },
+  'POST /inventory/stock-out': { body: body({ productId: z.string(), quantity: positiveInteger, reason: optionalText() }) },
+  'POST /inventory/adjustments': { body: body({ productId: z.string(), quantity: integer, reason: z.string() }) },
+  'GET /inventory/:productId/movements': { query: body({ type: optionalText(), from: optional(date), to: optional(date), page, limit: z.preprocess((value) => value === undefined ? 20 : value === null ? null : Number(value), z.number().int().min(1).nullable()) }) },
+  'POST /sales': { body: body({ customerId: optionalText(), guestName: optionalText(), paymentMethod: z.nativeEnum(PaymentMethod), paymentStatus: z.nativeEnum(SalePaymentStatus), amountPaid: optional(decimal), items: z.array(body({ productId: z.string(), quantity: positiveInteger, pricingOption: optional(z.enum(['NORMAL', 'PARTY'])) })).min(1) }) },
+  'GET /sales': { query: body({ from: optionalText(), to: optionalText(), customerId: optionalText(), paymentMethod: optionalText(), status: optionalText(), paymentStatus: optionalText(), recordedById: optionalText(), q: optionalText(), page, pageSize: sizedPage(25) }) },
+  'POST /expenses/categories': { body: body({ name: z.string().min(1) }) },
+  'PATCH /expenses/categories/:id': { body: body({ name: z.string().min(1) }) },
+  'POST /expenses': { body: body({ categoryId: z.string(), amount: decimal, description: optionalText(), expenseDate: date }) },
+  'PATCH /expenses/:id': { body: body({ categoryId: z.string(), amount: decimal, description: optionalText(), expenseDate: date }) },
+  'POST /bookings': { body: body({ roomId: z.string().min(1), customerId: z.string().min(1), checkIn: strictDate, checkOut: strictDate, source: optional(z.nativeEnum(BookingSource)) }) },
+  'PATCH /bookings/:id': { body: body({ status: optional(z.nativeEnum(BookingStatus)), roomId: optional(z.string().min(1)), customerId: optional(z.string().min(1)), checkIn: optional(strictDate), checkOut: optional(strictDate), source: optional(z.nativeEnum(BookingSource)) }) },
+  'GET /bookings': { query: body({ from: optional(strictDate), to: optional(strictDate), status: optional(z.nativeEnum(BookingStatus)), roomId: optionalText(), customerId: optionalText(), page, pageSize: sizedPage(20) }) },
+  'POST /bookings/:bookingId/payments': { body: body({ amount: decimal, method: z.nativeEnum(PaymentMethod), reference: optionalText() }) },
+  'POST /invoices/:id/payments': { body: body({ amount: decimal, method: z.nativeEnum(PaymentMethod), reference: optionalText() }) },
 };
 
 export function applyApiValidation(method: string, path: string, request: { body: unknown; query: unknown }) {

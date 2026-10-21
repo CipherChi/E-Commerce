@@ -10,7 +10,7 @@ describe('Express auth routes', () => {
     register: jest.fn().mockResolvedValue({ accessToken: 'access-register', refreshToken: 'refresh-register' }),
     login: jest.fn().mockResolvedValue({ accessToken: 'access-login', refreshToken: 'refresh-login' }),
     refresh: jest.fn().mockResolvedValue({ accessToken: 'access-new', refreshToken: 'refresh-new' }),
-    logout: jest.fn().mockResolvedValue(undefined), me: jest.fn().mockResolvedValue({ id: 'u1' }),
+    logout: jest.fn().mockResolvedValue({ success: true }), me: jest.fn().mockResolvedValue({ id: 'u1' }),
   };
   const jwt = { verifyAsync: jest.fn().mockResolvedValue({ sub: 'u1', tokenVersion: 0 }) };
   const prisma = {
@@ -30,21 +30,26 @@ describe('Express auth routes', () => {
     expect(response.headers['set-cookie'][0]).toContain('refresh-login');
   });
 
-  it('rejects missing/mismatched origins, rotates refresh cookie, and logs out with 204', async () => {
+  it('rejects missing/mismatched origins, rotates refresh cookie, and preserves Nest logout status/body', async () => {
     await request(app()).post('/auth/refresh').expect(403);
     const refreshed = await request(app()).post('/auth/refresh').set('Origin', 'https://bad.test').expect(403);
     expect(refreshed.body.statusCode).toBe(403);
     const rotated = await request(app()).post('/auth/refresh').set('Origin', environment.WEB_ORIGIN).set('Cookie', 'staywise_rt=eyJhbGciOiJub25lIn0.eyJzdWIiOiJ1MSJ9.signature').expect(201);
     expect(rotated.body).toEqual({ accessToken: 'access-new' });
     expect(rotated.headers['set-cookie'][0]).toContain('refresh-new');
-    const logout = await request(app()).post('/auth/logout').set('Origin', environment.WEB_ORIGIN).set('Authorization', 'Bearer access').expect(204);
-    expect(logout.text).toBe('');
+    const logout = await request(app()).post('/auth/logout').set('Origin', environment.WEB_ORIGIN).set('Authorization', 'Bearer access').expect(201);
+    expect(logout.body).toEqual({ success: true });
     expect(auth.logout).toHaveBeenCalledWith('u1');
   });
 
   it('rejects unknown input properties with the shared validation envelope', async () => {
     const response = await request(app()).post('/auth/login').send({ email: 'a@example.com', password: 'password123', extra: true }).expect(400);
-    expect(response.body).toMatchObject({ statusCode: 400, path: '/auth/login', requestId: expect.any(String) });
+    expect(response.body).toMatchObject({
+      statusCode: 400,
+      message: { statusCode: 400, error: 'Bad Request', message: ['property extra should not exist'] },
+      path: '/auth/login',
+      requestId: expect.any(String),
+    });
     expect(auth.login).not.toHaveBeenCalled();
   });
 });

@@ -4,6 +4,7 @@ import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { safeReturnPath } from '@/lib/auth-navigation.mjs';
+import { apiRequest, setAccessToken } from '@/lib/api';
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
@@ -20,19 +21,15 @@ export default function LoginPage() {
     try {
       const response = await fetch(`${apiUrl}/auth/login`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: form.get('email'), password: form.get('password') }),
       });
       const result = await response.json();
       if (!response.ok)
         throw new Error(typeof result.message === 'string' ? result.message : 'Unable to sign in');
-      sessionStorage.setItem('staywise.accessToken', result.accessToken);
-      sessionStorage.setItem('staywise.refreshToken', result.refreshToken);
-      sessionStorage.setItem('staywise.user', JSON.stringify(result.user));
-      const profileResponse = await fetch(`${apiUrl}/auth/me`, {
-        headers: { Authorization: `Bearer ${result.accessToken}` },
-      });
-      const profile = profileResponse.ok ? await profileResponse.json() : null;
+      setAccessToken(result.accessToken);
+      const profile = await apiRequest<{ businessId: string | null }>('/auth/me');
       const requested = new URLSearchParams(window.location.search).get('returnTo');
       router.replace(profile?.businessId ? safeReturnPath(requested) : '/business');
     } catch (cause) {

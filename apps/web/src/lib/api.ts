@@ -1,5 +1,39 @@
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
+let accessToken: string | null = null;
+let refreshPromise: Promise<string | null> | null = null;
+
+export function setAccessToken(token: string | null) {
+  accessToken = token;
+}
+
+export function refreshAccessToken(): Promise<string | null> {
+  if (accessToken) return Promise.resolve(accessToken);
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
+      try {
+        const response = await fetch(`${apiUrl}/auth/refresh`, {
+          method: 'POST',
+          credentials: 'include',
+        });
+        if (!response.ok) throw new Error('Session expired');
+        const result = (await response.json()) as { accessToken?: string };
+        if (typeof result.accessToken !== 'string' || !result.accessToken) {
+          throw new Error('Invalid session response');
+        }
+        accessToken = result.accessToken;
+        return accessToken;
+      } catch {
+        accessToken = null;
+        return null;
+      } finally {
+        refreshPromise = null;
+      }
+    })();
+  }
+  return refreshPromise;
+}
+
 export type ApiRequestMetric = {
   endpoint: string;
   method: string;
@@ -31,17 +65,26 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
   let response: Response | undefined;
   let requestId: string | undefined;
   let reported = false;
-  const token =
-    typeof window === 'undefined' ? null : sessionStorage.getItem('staywise.accessToken');
-  try {
-    response = await fetch(`${apiUrl}${path}`, {
+  const send = (token: string | null) =>
+    fetch(`${apiUrl}${path}`, {
       ...options,
+      credentials: 'include',
       headers: {
         ...(options.body ? { 'Content-Type': 'application/json' } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...options.headers,
       },
     });
+  try {
+    response = await send(accessToken);
+    if (
+      response.status === 401 &&
+      !['/auth/login', '/auth/register', '/auth/refresh'].includes(path)
+    ) {
+      accessToken = null;
+      const refreshedToken = await refreshAccessToken();
+      if (refreshedToken) response = await send(refreshedToken);
+    }
     requestId = response.headers.get('x-request-id') ?? undefined;
     const data = await response.json().catch(() => ({}));
     reportApiRequest({

@@ -4,22 +4,22 @@ This document began as a pre-migration inventory. The Express implementation now
 
 Implementation note: the current code keeps controllers and services in feature directories (`src/<feature>`) to preserve domain boundaries and existing service/test paths; the Express composition layer is in `src/routes`, `src/middleware`, `src/validation`, and `src/lib`. Services are plain classes with explicit constructor dependencies and no Nest container. The old `/api/docs` Swagger UI is not mounted; see the API README. Core persistence and its schema/migrations, JWT signing/verification library, and Argon2 hashing remain in use.
 
-Scope: `apps/api` only. This plan was prepared from the controllers, services, DTOs, modules, bootstrap, Prisma schema, and tests currently in the repository. No application source changes are part of this step. Paths below are relative to the API origin (there is no `/api` prefix on application routes; `/api/docs` is the Swagger UI).
+Scope: `apps/api` only. This inventory records the original Nest controllers, services, DTOs, modules, bootstrap, Prisma schema, and tests, alongside the current Express implementation and its parity status. Paths below are relative to the API origin (there is no `/api` prefix on application routes; `/api/docs` is the Swagger UI).
 
 ## Contract inventory and route parity
 
-Conventions: `JWT` means `JwtAuthGuard`; `BC` means `BusinessContextGuard`; `R(ADMIN)` means `RolesGuard` plus `@Roles('ADMIN')` (which accepts business membership `OWNER`). Every path parameter is an opaque string unless noted. `—` means no body/query DTO, not necessarily unchecked input. Nest defaults are **GET/PATCH/DELETE 200** and **POST 201**, except `POST /auth/logout` explicitly returns **204**. Unless noted, the response is the service result (commonly Prisma record/array; selected and serialized fields are determined by the service).
+Conventions: `JWT` means `JwtAuthGuard`; `BC` means `BusinessContextGuard`; `R(ADMIN)` means `RolesGuard` plus `@Roles('ADMIN')` (which accepts business membership `OWNER`). Every path parameter is an opaque string unless noted. `—` means no body/query DTO, not necessarily unchecked input. Nest defaults are **GET/PATCH/DELETE 200** and **POST 201**; the original logout had no `@HttpCode`, so it also returned 201. Unless noted, the response is the service result (commonly Prisma record/array; selected and serialized fields are determined by the service).
 
 | Method + path | Controller.handler | Guards | DTO / input | Success response | Status |
 |---|---|---|---|---|---|
 | GET /health | HealthController.check → ready | — | — | `{status:'ok',database:'ok'}` after DB probe | 200 |
 | GET /health/live | HealthController.live | — | — | `{status:'ok'}` | 200 |
 | GET /health/ready | HealthController.ready | — | — | `{status:'ok',database:'ok'}` after `SELECT 1` | 200 |
-| POST /auth/register | AuthController.register | Throttler (5/min) | RegisterDto | `{accessToken}` + `staywise_rt` cookie | 201 |
-| POST /auth/login | AuthController.login | Throttler (5/min) | LoginDto | `{accessToken}` + refresh cookie | 201 |
-| POST /auth/refresh | AuthController.refresh | Origin, Throttler (5/min) | refresh cookie | `{accessToken}` + rotated cookie; invalid token clears cookie then 401 | 201 |
+| POST /auth/register | AuthController.register | Throttler (5/min) | RegisterDto | Original Nest body `{accessToken,refreshToken,user}` | 201 |
+| POST /auth/login | AuthController.login | Throttler (5/min) | LoginDto | Original Nest body `{accessToken,refreshToken,user}` | 201 |
+| POST /auth/refresh | AuthController.refresh | Throttler (5/min) | RefreshDto body | Original Nest body `{accessToken,refreshToken,user}` | 201 |
 | GET /auth/me | AuthController.me | JWT | — | current profile and membership data (`AuthService.me`) | 200 |
-| POST /auth/logout | AuthController.logout | JWT, Origin | — | empty body; clears refresh cookie | 204 |
+| POST /auth/logout | AuthController.logout | JWT | — | `{success:true}` | 201 |
 | POST /businesses | BusinessesController.create | JWT | CreateBusinessDto | created business/member result | 201 |
 | GET /businesses/profile | BusinessesController.profile | JWT, BC | — | business profile | 200 |
 | GET /businesses/modules | BusinessesController.modules | JWT, BC | — | enabled module list | 200 |
@@ -103,7 +103,7 @@ No global route prefix is registered. `ADMIN` in role metadata means business me
 - **Global middleware (`main.ts`):** `helmet()` security headers; `cookie-parser`; request ID UUID in `req.requestId` and `X-Request-Id`; CORS allows exact `WEB_ORIGIN`, credentials enabled, exposes `X-Request-Id`. Express trust proxy is configured only from `false`/`off` or a positive hop count; invalid values including `true` become false. Preserve order: trust proxy before IP-based identity, parsers before handlers, request IDs before logs/errors.
 - **Guards:** `JwtAuthGuard` delegates to Passport `jwt`; bearer token only. `JwtStrategy` verifies active user and tokenVersion, resolves latest active `BusinessMember`, ignores token account role for business authorization, and rejects a user with memberships but none active. `BusinessContextGuard` returns 403 `Create or join a business first` if businessId/role absent. `RolesGuard` reads metadata; no role metadata means allow; ADMIN policy maps to OWNER membership. `OriginGuard` requires exact `Origin === WEB_ORIGIN`, else 403 `Invalid request origin`; used only refresh/logout. `ThrottlerGuard` plus route overrides: auth register/login/refresh 5 per 60s, public receipt reads 20 per 60s. Default configured limit is 5/min. If Redis URL is set, custom Redis storage is used; storage failure fails closed with 503.
 - **Decorator:** `@Roles` uses SetMetadata('roles', roles); parameter decorators bind request values. Swagger decorators (`@ApiTags`, `@ApiBearerAuth`, `@ApiOperation`, `@ApiPropertyOptional`) are metadata only.
-- **Global pipe:** `ValidationPipe({whitelist:true, transform:true, forbidNonWhitelisted:true})`. Class-validator metadata is the allow-list; extra fields reject with 400. class-transformer converts decorated numbers and nested sale lines and applies DTO defaults. `@Type(() => Boolean)` uses JS truthiness, so string `"false"` becomes true; Zod conversion must preserve this if contract parity is strict. Inputs without decorated DTOs are not equivalently constrained.
+- **Global pipe:** `ValidationPipe({whitelist:true, transform:true, forbidNonWhitelisted:true})`. Class-validator metadata is the allow-list; extra fields reject with 400. class-transformer converts decorated numbers and nested sale lines and applies DTO defaults. `@Type(() => Boolean)` uses JS truthiness, so string `"false"` becomes true. Inputs without decorated DTOs are not equivalently constrained.
 - **Interceptor:** `HttpLoggingInterceptor` logs JSON `{event:'http_request',requestId,method,path,statusCode,durationMs}` on finalize for success/error; route template or `unmatched`. It does not wrap response bodies.
 - **Filter:** `HttpExceptionFilter` catches all exceptions, formats response below, logs 5xx event and stack.
 - No custom Nest pipes, custom class-validator constraints, mailer, queue, scheduler, or cache module was found. `@Injectable` is DI metadata.
@@ -112,11 +112,11 @@ No global route prefix is registered. `ADMIN` in role metadata means business me
 
 Zod schemas should use `.strict()` for decorated DTOs, with explicit coercion/defaults matching class-transformer. Rules found:
 
-- `RegisterDto`: email valid, max 254; password string min 12; name string 1–200; BusinessType enum `primaryType`.
-- `LoginDto`: email valid max 254; password string min 8.
-- `CreateBusinessDto`: name string 1–200; BusinessType enum; optional phone string max 50; address max 500; logo optional HTTPS URL requiring protocol, max 2048.
-- Inline `ModuleUpdateDto`: BusinessModuleType enum + boolean `isEnabled`. Inline `CreateStaffDto`: name string max 200 (no minimum), valid email max 254, password min 8. Inline staff active body `{isActive:boolean}` has no validator metadata and is a known validation gap.
-- `CreatePropertyDto`: name string 1–200, address 1–500, optional PropertyType enum. `UpdatePropertyDto` is Swagger `PartialType` (all optional, same rules).
+- `RegisterDto`: email valid; password string min 12; name string min 1; BusinessType enum `primaryType`.
+- `LoginDto`: email valid; password string min 8.
+- `CreateBusinessDto`: name string min 1; BusinessType enum; optional phone/address/logo are strings (no max length or URL restriction).
+- Inline `ModuleUpdateDto`: BusinessModuleType enum + boolean `isEnabled`. Inline `CreateStaffDto`: name string, valid email, password min 8. Inline staff active body `{isActive:boolean}` has no validator metadata and is a known validation gap.
+- `CreatePropertyDto`: name/address strings min 1, optional PropertyType enum. `UpdatePropertyDto` is Swagger `PartialType` (all optional, same rules).
 - `CreateRoomDto`: label 1–200, type 1–100, capacity number integer >=1, basePrice decimal string regex `^\d+(\.\d{1,2})?$`, optional RoomStatus enum. Update is partial.
 - `CreateCustomerDto`: name 1–200, phone 3–50; optional email valid max 254, idType/idNumber max 100, notes max 2000. Update partial. `ListCustomersDto`: optional q max 200; page integer >=1 default 1; pageSize integer 1–100 default 25; both query numerics transformed.
 - Catalog create: name string max 200; BusinessModuleType; optional category max 200; optional costPrice/sellingPrice/normalRate/partyRate/monthlyPrice decimal strings with same regex; optional isStockable Boolean transform; lowStockThreshold number integer >=0. Update makes fields optional. `ListCatalogDto`: module enum, category max 200, is_stockable/is_archived strings, q max 200, page >=1 default 1, pageSize 1–100 default 25.
@@ -186,7 +186,7 @@ The implementation uses **Express 4.21.2 + `asyncHandler`**. This retains the ex
 | Middleware | Express Helmet, cookie parser, CORS, IDs, trust proxy, JSON parser |
 | Throttler module/guard | rate-limit middleware + current Redis storage semantics, limits, fail-closed behavior and response headers |
 | Parameter decorators | `req.params`, validated `req.body/query`, augmented typed request; `res` for cookies/PDF only |
-| `@HttpCode` | explicit status constants; `res.status(204).end()` on logout; preserve POST 201 |
+| `@HttpCode` | explicit status constants; preserve Nest defaults (including POST 201 on logout) |
 | SwaggerModule | removed for this migration; `/api/docs` and generated OpenAPI URLs are currently unavailable |
 | Nest lifecycle hooks | explicit startup/shutdown: Prisma connect/disconnect, Redis quit, graceful HTTP close |
 | Nest testing module | plain dependency injection through app factory and Supertest |
@@ -245,8 +245,9 @@ Mark each only after comparing method/path, policy, input validation, response f
 - API checks passed: `corepack pnpm --filter api lint`, `corepack pnpm --filter api build`, and `corepack pnpm --filter api test` (33 suites, 138 tests).
 - API e2e passed with the migrated dedicated test database: `corepack pnpm --filter api exec jest --config ./test/jest-e2e.config.json --runInBand --silent` (5 suites, 46 tests).
 - Web checks passed: `corepack pnpm --filter web exec tsc --noEmit`, `corepack pnpm --filter web lint`, and `corepack pnpm --filter web build`. Web lint/build report a pre-existing exhaustive-deps warning in `apps/web/src/app/(dashboard)/sales/page.tsx` for `priceFor`.
-- Live curl flow passed: registration 201, login 201, authenticated `/auth/me` 200, refresh 201, logout 204. Test accounts were removed after the smoke run.
+- Live curl flow passed before the historical logout status correction: registration 201, login 201, authenticated `/auth/me` 200, refresh 201, logout 204. Re-run logout smoke after parity correction; temporary test accounts were removed.
 - Known deviation: Swagger UI/OpenAPI endpoints were removed and are not route-parity checked.
+- Contract review note: the Express auth design intentionally places refresh tokens only in an HttpOnly cookie and returns only `{accessToken}`; historical Nest register/login/refresh returned `{accessToken,refreshToken,user}` in JSON. Express refresh also reads the cookie and refresh/logout require an exact Origin, while historical refresh used `RefreshDto` and logout required JWT only. These are security improvements requested for the Express target, but they are externally observable contract changes and require an explicit migration decision before deployment.
 
 - [ ] GET /health — HealthController.check
 - [ ] GET /health/live — HealthController.live
