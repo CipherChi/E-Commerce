@@ -8,10 +8,15 @@ import { notFound } from './middleware/not-found';
 import { requestIdMiddleware } from './common/request-id.middleware';
 import { requestLogger } from './middleware/request-logger';
 import { trustProxySetting } from './config/trust-proxy';
+import { PrismaClient } from '@prisma/client';
+import { AuthService } from './auth/auth.service';
+import { JwtService } from '@nestjs/jwt';
+import { createAuthRouter } from './routes/auth.routes';
 
 export interface AppOptions {
   environment?: NodeJS.ProcessEnv;
   logger?: Pick<Console, 'log' | 'error'>;
+  dependencies?: { prisma: PrismaClient; jwt: JwtService; auth: AuthService };
 }
 
 export function createApp(options: AppOptions = {}): Express {
@@ -42,6 +47,20 @@ export function createApp(options: AppOptions = {}): Express {
   app.use(cookieParser());
   app.use(requestIdMiddleware);
   app.use(requestLogger(options.logger));
+
+  if (options.dependencies) {
+    const { prisma, jwt, auth } = options.dependencies;
+    app.get('/health/live', (_req, res) => res.json({ status: 'ok' }));
+    const readiness = async (_req: express.Request, res: express.Response, next: express.NextFunction) => {
+      try {
+        await prisma.$queryRaw`SELECT 1`;
+        res.json({ status: 'ok', database: 'ok' });
+      } catch (error) { next(error); }
+    };
+    app.get('/health', readiness);
+    app.get('/health/ready', readiness);
+    app.use('/auth', createAuthRouter(auth, jwt, prisma, config.JWT_ACCESS_SECRET, config.WEB_ORIGIN, config.REDIS_URL));
+  }
 
   // Feature routers are attached incrementally; keep this factory independent of listen().
   app.use(notFound);
