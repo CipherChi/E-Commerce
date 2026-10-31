@@ -36,8 +36,8 @@ const schemaTenantCoverageInventory = [
 if (!databaseUrl)
   throw new Error('Set TENANT_TEST_DATABASE_URL to a dedicated migrated Postgres test database.');
 process.env.DATABASE_URL = databaseUrl;
-process.env.JWT_ACCESS_SECRET = 'tenant-test-access-secret';
-process.env.JWT_REFRESH_SECRET = 'tenant-test-refresh-secret';
+process.env.JWT_ACCESS_SECRET = 'tenant-test-access-secret-32-characters-long-000';
+process.env.JWT_REFRESH_SECRET = 'tenant-test-refresh-secret-32-characters-long-000';
 process.env.WEB_ORIGIN = process.env.WEB_ORIGIN ?? 'http://localhost:3000';
 
 describe('Cross-business isolation (real Postgres)', () => {
@@ -419,6 +419,16 @@ describe('Cross-business isolation (real Postgres)', () => {
     await request(app)
       .patch(`/businesses/staff/${staff.id}`)
       .set('Authorization', tokenA)
+      .send({ isActive: false, extra: true })
+      .expect(400);
+    await request(app)
+      .patch(`/businesses/staff/${staff.id}`)
+      .set('Authorization', tokenA)
+      .send({ isActive: 'false' })
+      .expect(400);
+    await request(app)
+      .patch(`/businesses/staff/${staff.id}`)
+      .set('Authorization', tokenA)
       .send({ isActive: false })
       .expect(200);
 
@@ -734,10 +744,12 @@ describe('Cross-business isolation (real Postgres)', () => {
     const failed = responses.filter((response) => response.status !== 201);
     expect(successful.length + failed.length).toBe(30);
     expect(successful.length).toBeGreaterThan(0);
-    expect(failed.every((response) => response.status === 503)).toBe(true);
+    expect(failed.map((response) => response.status)).toEqual(
+      Array.from({ length: failed.length }, () => 503),
+    );
     expect(
       failed.every((response) =>
-        String(response.body.message).includes('Retry with the same Idempotency-Key'),
+        response.body.message?.message?.includes('Retry with the same Idempotency-Key'),
       ),
     ).toBe(true);
 

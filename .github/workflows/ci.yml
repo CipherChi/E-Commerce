@@ -30,11 +30,21 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Reject stale framework and API-doc references
+        run: |
+          if grep -niE 'NestJS|Swagger' README.md apps/api/README.md || \
+             sed '/^## Migration record$/,$d' docs/architecture.md | grep -niE 'NestJS|Swagger' || \
+             find docs -type f ! -name 'architecture.md' ! -name 'express-migration-plan.md' ! -name 'dependency-audit.md' -print0 | xargs -0 -r grep -niE 'NestJS|Swagger'; then
+            echo "Current documentation contains outdated API framework or API-doc references."
+            exit 1
+          fi
       - name: Generate Prisma client
         working-directory: apps/api
         run: pnpm exec prisma generate --schema prisma/schema.prisma
       - name: Lint
-        run: pnpm lint
+        run: |
+          pnpm lint
+          corepack pnpm --filter api lint
       - name: Build (all workspaces)
         run: pnpm build
 
@@ -120,8 +130,8 @@ jobs:
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/app_test?schema=public
       TENANT_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/app_test?schema=public
-      JWT_ACCESS_SECRET: ci-e2e-access-secret
-      JWT_REFRESH_SECRET: ci-e2e-refresh-secret
+      JWT_ACCESS_SECRET: ci-e2e-access-secret-at-least-32-characters
+      JWT_REFRESH_SECRET: ci-e2e-refresh-secret-at-least-32-characters
       WEB_ORIGIN: http://localhost:3000
     steps:
       - uses: actions/checkout@v4
@@ -159,8 +169,8 @@ jobs:
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       TENANT_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/hotel_manager_test?schema=public
-      JWT_ACCESS_SECRET: ci-playwright-access-secret
-      JWT_REFRESH_SECRET: ci-playwright-refresh-secret
+      JWT_ACCESS_SECRET: ci-playwright-access-secret-at-least-32-characters
+      JWT_REFRESH_SECRET: ci-playwright-refresh-secret-at-least-32-characters
       WEB_ORIGIN: http://localhost:3000
     steps:
       - uses: actions/checkout@v4

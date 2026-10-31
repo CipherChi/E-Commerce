@@ -4,8 +4,8 @@ import { createApp } from './app';
 describe('Express application factory', () => {
   const environment = {
     DATABASE_URL: 'postgresql://localhost/test',
-    JWT_ACCESS_SECRET: 'access-test-secret',
-    JWT_REFRESH_SECRET: 'refresh-test-secret',
+    JWT_ACCESS_SECRET: 'a'.repeat(32),
+    JWT_REFRESH_SECRET: 'b'.repeat(32),
     WEB_ORIGIN: 'http://localhost:3000',
     NODE_ENV: 'test',
   };
@@ -15,7 +15,7 @@ describe('Express application factory', () => {
     const response = await request(app).get('/missing?query=1').expect(404);
     expect(response.body).toMatchObject({
       statusCode: 404,
-      path: '/missing?query=1',
+      path: '/missing',
       requestId: expect.any(String),
     });
     expect(response.headers['x-request-id']).toBe(response.body.requestId);

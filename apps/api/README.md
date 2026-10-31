@@ -1,18 +1,50 @@
-# API
+# Express API
 
-The API is an Express 4 application written in TypeScript. Copy `apps/api/.env.example` to `apps/api/.env`, set the required database and JWT secrets, and apply migrations with `corepack pnpm --filter api exec prisma migrate deploy`.
+The API is an Express 4 application written in TypeScript, with Zod request validation and Prisma/PostgreSQL persistence. The maintained route and guard contract is [documented here](../../docs/api-routes.md). An interactive API documentation endpoint is not included.
+
+## Install and configure
 
 From the repository root:
 
-- `corepack pnpm --filter api start:dev` runs the API with reload.
-- `corepack pnpm --filter api build` compiles to `apps/api/dist`.
-- `corepack pnpm --filter api start` runs the compiled server.
-- `corepack pnpm --filter api lint` runs ESLint on API TypeScript sources.
-- `corepack pnpm --filter api test` runs unit tests.
-- `corepack pnpm --filter api test:e2e` runs e2e tests.
+```sh
+corepack pnpm install --frozen-lockfile
+```
 
-Tests that exercise tenant isolation use a dedicated Postgres database. Set `TENANT_TEST_DATABASE_URL` in `.env`, export that URL as `DATABASE_URL`, and run Prisma migrations against it before `corepack pnpm --filter api test:e2e`.
+Copy `apps/api/.env.example` to `apps/api/.env`, set distinct random JWT secrets of at least 32 characters and a PostgreSQL `DATABASE_URL`, and set `WEB_ORIGIN` to the web app's origin. For a local database, start PostgreSQL with `docker compose -f infra/docker-compose.yml up -d postgres`. Apply the checked-in migrations and optionally seed an initial owner:
 
-The previous Nest Swagger UI at `/api/docs` is not currently served. Route and DTO contracts are documented in [`docs/express-migration-plan.md`](../../docs/express-migration-plan.md); that route inventory is also used by the route-parity test.
+```sh
+corepack pnpm --filter api exec prisma migrate deploy
+corepack pnpm --filter api prisma:seed
+```
 
-New accounts can create a business at `POST /businesses`. Catalog items are business-scoped and assigned to an enabled service module (`LODGING`, `FOOD`, `BEVERAGE`, or `GYM`) with a free-text category. Only `isStockable` items enter inventory; lodging items are always non-stockable. Business owners can enable or disable modules in Settings; disabling hides those items from catalog and sales selection without deleting history. Completed sale lines snapshot the selected type-specific price, and sale completion plus stock deductions happens in one serializable database transaction.
+## Run, build, lint, and test
+
+```sh
+corepack pnpm dev:api
+corepack pnpm --filter api build
+corepack pnpm --filter api lint
+corepack pnpm --filter api test
+corepack pnpm --filter api test:e2e
+```
+
+The development command reads `apps/api/.env`. The compiled server reads process environment variables in production; container/deployment examples set those directly.
+
+The e2e suite uses a dedicated, migrated test database and must not use development or production data. Configure both `TENANT_TEST_DATABASE_URL` and `DATABASE_URL` to a disposable PostgreSQL database named `hotel_manager_test`, then migrate and run:
+
+```powershell
+$env:TENANT_TEST_DATABASE_URL = "postgresql://user:password@localhost:5432/hotel_manager_test?schema=public"
+$env:DATABASE_URL = $env:TENANT_TEST_DATABASE_URL
+corepack pnpm --filter api exec prisma migrate deploy
+corepack pnpm --filter api test:e2e
+```
+
+The tenant suite refuses to run when `TENANT_TEST_DATABASE_URL` is missing. CI creates an ephemeral PostgreSQL database for these tests.
+
+## Operational behavior
+
+- `/health/live` checks that the process responds. `/health/ready` and `/health` also probe PostgreSQL.
+- Set `REDIS_URL` for shared rate limits across multiple API replicas; without it, storage is process-local.
+- `TRUST_PROXY` accepts `false` or a positive trusted hop count. Do not trust arbitrary forwarded headers.
+- `SENTRY_DSN` is optional. When set, only a sanitized generic server error event and request ID are sent; request URL, headers, cookies, and body are not included.
+- Database backups and deployment environment requirements are described in [deployment](../../docs/deployment.md) and [backup/restore](../../docs/backup-restore.md).
+

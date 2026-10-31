@@ -8,6 +8,7 @@ let app: Express;
 let jwt: JwtAdapter;
 const webOrigin = 'http://localhost:3000';
 let clientSequence = 0;
+let refreshReadBarrier: { remaining: number; promise: Promise<void>; release: () => void } | null = null;
 
 describe('Authentication endpoints', () => {
   const users: any[] = [];
@@ -17,10 +18,18 @@ describe('Authentication endpoints', () => {
   >();
   const prisma = {
     user: {
-      findUnique: jest.fn(
-        ({ where }: any) =>
-          users.find((user) => user.id === where.id || user.email === where.email) ?? null,
-      ),
+      findUnique: jest.fn(async ({ where, select }: any) => {
+        const found = users.find((user) => user.id === where.id || user.email === where.email);
+        const snapshot = found ? { ...found } : null;
+        if (where.id && !select && refreshReadBarrier) {
+          const barrier = refreshReadBarrier;
+          barrier.remaining -= 1;
+          if (barrier.remaining === 0) barrier.release();
+          await barrier.promise;
+          if (refreshReadBarrier === barrier && barrier.remaining === 0) refreshReadBarrier = null;
+        }
+        return snapshot;
+      }),
       create: jest.fn(({ data }: any) => {
         const user = {
           id: `user-${users.length + 1}`,
@@ -43,6 +52,14 @@ describe('Authentication endpoints', () => {
         if (tokenVersion?.increment) user.tokenVersion += tokenVersion.increment;
         else if (typeof tokenVersion === 'number') user.tokenVersion = tokenVersion;
         return user;
+      }),
+      updateMany: jest.fn(({ where, data }: any) => {
+        const user = users.find((entry) => entry.id === where.id);
+        if (!user || user.refreshTokenHash !== where.refreshTokenHash || user.tokenVersion !== where.tokenVersion) {
+          return { count: 0 };
+        }
+        user.refreshTokenHash = data.refreshTokenHash;
+        return { count: 1 };
       }),
     },
     loginAttempt: {
@@ -82,8 +99,8 @@ describe('Authentication endpoints', () => {
   };
 
   beforeAll(async () => {
-    process.env.JWT_ACCESS_SECRET = 'test-access-secret';
-    process.env.JWT_REFRESH_SECRET = 'test-refresh-secret';
+    process.env.JWT_ACCESS_SECRET = 'test-access-secret-32-characters-long-000';
+    process.env.JWT_REFRESH_SECRET = 'test-refresh-secret-32-characters-long-000';
     process.env.WEB_ORIGIN = webOrigin;
     process.env.TRUST_PROXY = '1';
     jwt = new JwtAdapter();
@@ -135,8 +152,7 @@ describe('Authentication endpoints', () => {
     expect(login.headers['set-cookie'][0]).toMatch(/SameSite=Strict/i);
     expect(login.headers['set-cookie'][0]).toMatch(/Path=\/auth/i);
     expect(login.body).toEqual({ accessToken: expect.any(String) });
-    const refreshed = await request(app)
-      .post('/auth/refresh')
+    const refreshed = await remoteRequest('/auth/refresh')
       .set('Origin', webOrigin)
       .set('Cookie', loginCookie)
       .expect(201);
@@ -157,8 +173,7 @@ describe('Authentication endpoints', () => {
     expect(logout.headers['set-cookie'][0]).toMatch(/staywise_rt=;/);
     expect(logout.headers['set-cookie'][0]).toMatch(/Path=\/auth/i);
     await request(app).get('/auth/me').set(auth).expect(401);
-    await request(app)
-      .post('/auth/refresh')
+    await remoteRequest('/auth/refresh')
       .set('Origin', webOrigin)
       .set('Cookie', cookiePair(refreshed))
       .expect(401);
@@ -166,28 +181,46 @@ describe('Authentication endpoints', () => {
 
   it('rejects refresh with missing or foreign Origin and with no cookie', async () => {
     const { cookie } = await createSession();
-    await request(app).post('/auth/refresh').set('Cookie', cookie).expect(403);
-    await request(app)
-      .post('/auth/refresh')
+    await remoteRequest('/auth/refresh').set('Cookie', cookie).expect(403);
+    await remoteRequest('/auth/refresh')
       .set('Origin', 'https://attacker.example')
       .set('Cookie', cookie)
       .expect(403);
-    await request(app).post('/auth/refresh').set('Origin', webOrigin).expect(401);
+    await remoteRequest('/auth/refresh').set('Origin', webOrigin).expect(401);
   }, 30000);
 
   it('rotates the refresh cookie and invalidates a replayed cookie', async () => {
     const { cookie } = await createSession();
-    const rotated = await request(app)
-      .post('/auth/refresh')
+    const rotated = await remoteRequest('/auth/refresh')
       .set('Origin', webOrigin)
       .set('Cookie', cookie)
       .expect(201);
     const rotatedCookie = cookiePair(rotated);
     expect(rotatedCookie).not.toBe(cookie);
-    await request(app)
-      .post('/auth/refresh')
+    await remoteRequest('/auth/refresh')
       .set('Origin', webOrigin)
       .set('Cookie', cookie)
+      .expect(401);
+    await remoteRequest('/auth/refresh')
+      .set('Origin', webOrigin)
+      .set('Cookie', rotatedCookie)
+      .expect(401);
+  }, 30000);
+
+  it('permits only one of two concurrent refreshes and invalidates the session after replay', async () => {
+    const { cookie } = await createSession();
+    let release!: () => void;
+    const promise = new Promise<void>((resolve) => { release = resolve; });
+    refreshReadBarrier = { remaining: 2, promise, release };
+    const responses = await Promise.all([
+      remoteRequest('/auth/refresh').set('Origin', webOrigin).set('Cookie', cookie),
+      remoteRequest('/auth/refresh').set('Origin', webOrigin).set('Cookie', cookie),
+    ]);
+    expect(responses.map((response) => response.status).sort()).toEqual([201, 401]);
+    const winner = responses.find((response) => response.status === 201)!;
+    await remoteRequest('/auth/refresh')
+      .set('Origin', webOrigin)
+      .set('Cookie', cookiePair(winner))
       .expect(401);
   }, 30000);
 
@@ -200,14 +233,19 @@ describe('Authentication endpoints', () => {
     expect(response.headers['access-control-allow-origin']).toBeUndefined();
   });
 
-  it('preserves the original DTO behavior for logo and unbounded business name strings', async () => {
+  it('rejects insecure business logos and over-length business names', async () => {
     const { accessToken } = await createSession();
     const auth = { Authorization: `Bearer ${accessToken}` };
     await request(app)
       .post('/businesses')
       .set(auth)
-      .send({ name: 'x'.repeat(201), primaryType: 'HOTEL', logo: 'http://example.com/logo.png' })
-      .expect(201);
+      .send({ name: 'Business', primaryType: 'HOTEL', logo: 'http://example.com/logo.png' })
+      .expect(400);
+    await request(app)
+      .post('/businesses')
+      .set(auth)
+      .send({ name: 'x'.repeat(201), primaryType: 'HOTEL', logo: 'https://example.com/logo.png' })
+      .expect(400);
   }, 30000);
 
   it('rejects invalid passwords without revealing account existence', async () => {

@@ -3,8 +3,8 @@ import { createApp } from '../app';
 
 describe('Express auth routes', () => {
   const environment = {
-    DATABASE_URL: 'postgresql://localhost/test', JWT_ACCESS_SECRET: 'access-secret',
-    JWT_REFRESH_SECRET: 'refresh-secret', WEB_ORIGIN: 'http://localhost:3000', NODE_ENV: 'test',
+    DATABASE_URL: 'postgresql://localhost/test', JWT_ACCESS_SECRET: 'access-secret-32-characters-long-000',
+    JWT_REFRESH_SECRET: 'refresh-secret-32-characters-long-000', WEB_ORIGIN: 'http://localhost:3000', NODE_ENV: 'test',
   };
   const auth = {
     register: jest.fn().mockResolvedValue({ accessToken: 'access-register', refreshToken: 'refresh-register' }),

@@ -9,7 +9,7 @@ describe('PaymentsController role policy', () => {
   };
   const methods = new Proxy({}, { get: () => jest.fn().mockResolvedValue({ ok: true }) });
   const app = createApp({
-    environment: { DATABASE_URL: 'postgresql://localhost/test', JWT_ACCESS_SECRET: 'access-secret', JWT_REFRESH_SECRET: 'refresh-secret', WEB_ORIGIN: 'http://localhost:3000' },
+    environment: { DATABASE_URL: 'postgresql://localhost/test', JWT_ACCESS_SECRET: 'access-secret-32-characters-long-000', JWT_REFRESH_SECRET: 'refresh-secret-32-characters-long-000', WEB_ORIGIN: 'http://localhost:3000' },
     logger: { log: jest.fn(), error: jest.fn() },
     dependencies: {
       prisma: prisma as never,

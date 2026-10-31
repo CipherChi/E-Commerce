@@ -8,8 +8,8 @@ const databaseUrl = process.env.TENANT_TEST_DATABASE_URL;
 if (!databaseUrl)
   throw new Error('Set TENANT_TEST_DATABASE_URL to a dedicated migrated Postgres test database.');
 process.env.DATABASE_URL = databaseUrl;
-process.env.JWT_ACCESS_SECRET = 'booking-test-access-secret';
-process.env.JWT_REFRESH_SECRET = 'booking-test-refresh-secret';
+process.env.JWT_ACCESS_SECRET = 'booking-test-access-secret-32-characters-long-000';
+process.env.JWT_REFRESH_SECRET = 'booking-test-refresh-secret-32-characters-long-000';
 process.env.TZ = 'Africa/Lagos';
 
 describe('Booking engine (real Postgres)', () => {
@@ -280,7 +280,9 @@ describe('Booking engine (real Postgres)', () => {
     const partial = await request(app).get(`/invoices/${invoice.body.id}`).set('Authorization', token).expect(200);
     expect(partial.body.status).toBe('PARTIAL');
     expect(partial.body.balance).toBe('40.25');
-    const dashboardPartial = await request(app).get('/dashboard/summary').set('Authorization', token).expect(200);
+    const paidAt = await prisma.payment.findFirstOrThrow({ where: { businessId }, select: { paidAt: true } });
+    const dashboardDate = paidAt.paidAt.toISOString().slice(0, 10);
+    const dashboardPartial = await request(app).get(`/dashboard/summary?date=${dashboardDate}`).set('Authorization', token).expect(200);
     expect(dashboardPartial.body).toMatchObject({ collectedPayments: '60.00', outstandingPayments: '40.25' });
     const recorded = await request(app).get(`/invoices/${invoice.body.id}/payments`).set('Authorization', token).expect(200);
     await request(app).patch(`/payments/${recorded.body[0].id}`).set('Authorization', token).send({ amount: '0.01' }).expect(400);
@@ -290,7 +292,7 @@ describe('Booking engine (real Postgres)', () => {
     expect((await prisma.payment.count({ where: { bookingId: booking.body.id, reference: 'same-reference' } })).toString()).toBe('1');
     const paid = await request(app).get(`/invoices/${invoice.body.id}`).set('Authorization', token).expect(200);
     expect(paid.body).toMatchObject({ status: 'PAID', balance: '0' });
-    const dashboardPaid = await request(app).get('/dashboard/summary').set('Authorization', token).expect(200);
+    const dashboardPaid = await request(app).get(`/dashboard/summary?date=${dashboardDate}`).set('Authorization', token).expect(200);
     expect(dashboardPaid.body).toMatchObject({ collectedPayments: '100.25', outstandingPayments: '0.00' });
     await request(app).delete(`/invoices/${invoice.body.id}`).set('Authorization', token).expect(400);
   });

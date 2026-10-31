@@ -7,8 +7,8 @@ import { createContainer } from '../src/lib/container';
 const databaseUrl = process.env.TENANT_TEST_DATABASE_URL;
 if (!databaseUrl) throw new Error('Set TENANT_TEST_DATABASE_URL to a dedicated migrated Postgres test database.');
 process.env.DATABASE_URL = databaseUrl;
-process.env.JWT_ACCESS_SECRET = 'tenant-test-access-secret';
-process.env.JWT_REFRESH_SECRET = 'tenant-test-refresh-secret';
+process.env.JWT_ACCESS_SECRET = 'tenant-test-access-secret-32-characters-long-000';
+process.env.JWT_REFRESH_SECRET = 'tenant-test-refresh-secret-32-characters-long-000';
 
 describe('Login lockout (real Postgres)', () => {
   let auth: AuthService;

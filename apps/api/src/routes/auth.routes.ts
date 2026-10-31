@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { NextFunction, Request, Response, Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { AuthService } from '../auth/auth.service';
 import { asyncHandler } from '../lib/async-handler';
@@ -11,23 +11,27 @@ import { captureRouteTemplate } from '../middleware/request-logger';
 
 const cookieName = 'staywise_rt';
 const cookieMaxAge = 7 * 24 * 60 * 60 * 1000;
+function captureAuthRouteTemplate(req: Request & { requestLogPath?: string }, res: Response, next: NextFunction) {
+  captureRouteTemplate(req, res, next);
+  if (req.requestLogPath && !req.requestLogPath.startsWith('/auth/')) req.requestLogPath = `/auth${req.requestLogPath}`;
+}
 function cookieOptions(maxAge = true) {
   return { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict' as const, path: '/auth', ...(maxAge ? { maxAge: cookieMaxAge } : {}) };
 }
 
 export function createAuthRouter(auth: AuthService, jwt: JwtPort, prisma: PrismaClient, accessSecret: string, webOrigin: string, redisUrl?: string): Router {
   const router = Router();
-  router.post('/register', captureRouteTemplate, rateLimit(5, 60_000, redisUrl, 'auth:register'), validateBody(registerSchema), asyncHandler(async (req, res) => {
+  router.post('/register', captureAuthRouteTemplate, rateLimit(5, 60_000, redisUrl, 'auth:register'), validateBody(registerSchema), asyncHandler(async (req, res) => {
     const session = await auth.register(req.validatedBody as never);
     res.cookie(cookieName, session.refreshToken, cookieOptions());
     res.status(201).json({ accessToken: session.accessToken });
   }));
-  router.post('/login', captureRouteTemplate, rateLimit(5, 60_000, redisUrl, 'auth:login'), validateBody(loginSchema), asyncHandler(async (req, res) => {
+  router.post('/login', captureAuthRouteTemplate, rateLimit(5, 60_000, redisUrl, 'auth:login'), validateBody(loginSchema), asyncHandler(async (req, res) => {
     const session = await auth.login(req.validatedBody as never, req.ip ?? 'unknown');
     res.cookie(cookieName, session.refreshToken, cookieOptions());
     res.status(201).json({ accessToken: session.accessToken });
   }));
-  router.post('/refresh', captureRouteTemplate, requireOrigin(webOrigin), rateLimit(5, 60_000, redisUrl, 'auth:refresh'), asyncHandler(async (req, res) => {
+  router.post('/refresh', captureAuthRouteTemplate, requireOrigin(webOrigin), rateLimit(5, 60_000, redisUrl, 'auth:refresh'), asyncHandler(async (req, res) => {
     const token = req.cookies?.[cookieName];
     try {
       if (!token) throw new Error('Invalid refresh token');
@@ -42,11 +46,11 @@ export function createAuthRouter(auth: AuthService, jwt: JwtPort, prisma: Prisma
       throw error;
     }
   }));
-  router.get('/me', captureRouteTemplate, authenticate(jwt, prisma, accessSecret), asyncHandler(async (req, res) => {
+  router.get('/me', captureAuthRouteTemplate, authenticate(jwt, prisma, accessSecret), asyncHandler(async (req, res) => {
     const user = (req as typeof req & { user: { sub: string } }).user;
     res.json(await auth.me(user.sub));
   }));
-  router.post('/logout', captureRouteTemplate, authenticate(jwt, prisma, accessSecret), requireOrigin(webOrigin), asyncHandler(async (req, res) => {
+  router.post('/logout', captureAuthRouteTemplate, authenticate(jwt, prisma, accessSecret), requireOrigin(webOrigin), asyncHandler(async (req, res) => {
     const user = (req as typeof req & { user: { sub: string } }).user;
     const result = await auth.logout(user.sub);
     res.clearCookie(cookieName, cookieOptions(false));

@@ -14,7 +14,7 @@ describe('AuthService', () => {
     refreshTokenHash: null,
   };
   const prisma: any = {
-    user: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
+    user: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
     loginAttempt: { findUnique: jest.fn().mockResolvedValue(null), deleteMany: jest.fn() },
     $executeRaw: jest.fn(),
   };
@@ -181,13 +181,82 @@ describe('AuthService', () => {
     prisma.user.findUnique.mockResolvedValue({ ...user, refreshTokenHash: 'stored-hash' });
     jwt.verifyAsync.mockResolvedValue({ sub: user.id, tokenVersion: 0 });
     prisma.user.update.mockResolvedValue(user);
+    prisma.user.updateMany.mockResolvedValue({ count: 1 });
     jest.spyOn(argon2, 'verify').mockResolvedValue(true);
     jest.spyOn(argon2, 'hash').mockResolvedValue('new-hash');
     const result = await service.refresh(user.id, 'refresh-token');
     expect(result.refreshToken).toBe('signed-token');
-    expect(prisma.user.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { refreshTokenHash: 'new-hash' } }),
-    );
+    expect(prisma.user.updateMany).toHaveBeenCalledWith({
+      where: { id: user.id, refreshTokenHash: 'stored-hash', tokenVersion: 0 },
+      data: { refreshTokenHash: 'new-hash' },
+    });
+  });
+
+  it('allows only one concurrent refresh CAS and invalidates the session on the losing replay', async () => {
+    let storedHash: string | null = 'stored-hash';
+    let tokenVersion = 0;
+    prisma.user.findUnique.mockImplementation(async () => ({
+      ...user,
+      tokenVersion,
+      refreshTokenHash: storedHash,
+    }));
+    prisma.user.updateMany.mockImplementation(async ({ where, data }: any) => {
+      if (where.refreshTokenHash !== storedHash || where.tokenVersion !== tokenVersion) return { count: 0 };
+      storedHash = data.refreshTokenHash;
+      return { count: 1 };
+    });
+    prisma.user.update.mockImplementation(async ({ data }: any) => {
+      storedHash = data.refreshTokenHash;
+      tokenVersion += data.tokenVersion.increment;
+      return user;
+    });
+    jwt.verifyAsync.mockResolvedValue({ sub: user.id, tokenVersion: 0 });
+    jest.spyOn(argon2, 'verify').mockResolvedValue(true);
+
+    const results = await Promise.allSettled([
+      service.refresh(user.id, 'same-refresh-token'),
+      service.refresh(user.id, 'same-refresh-token'),
+    ]);
+
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    const rejected = results.find((result) => result.status === 'rejected') as PromiseRejectedResult;
+    expect(rejected.reason).toBeInstanceOf(UnauthorizedException);
+    expect(storedHash).toBeNull();
+    expect(tokenVersion).toBe(1);
+  });
+
+  it('rejects sequential reuse of an old token and invalidates the replacement session', async () => {
+    prisma.user.findUnique
+      .mockResolvedValueOnce({ ...user, refreshTokenHash: 'old-hash' })
+      .mockResolvedValueOnce({ ...user, refreshTokenHash: 'replacement-hash' });
+    prisma.user.updateMany.mockResolvedValue({ count: 1 });
+    prisma.user.update.mockResolvedValue(user);
+    jwt.verifyAsync.mockResolvedValue({ sub: user.id, tokenVersion: 0 });
+    jest.spyOn(argon2, 'verify').mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    jest.spyOn(argon2, 'hash').mockResolvedValue('replacement-hash');
+
+    await expect(service.refresh(user.id, 'old-token')).resolves.toMatchObject({
+      accessToken: 'signed-token',
+    });
+    await expect(service.refresh(user.id, 'old-token')).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: user.id },
+      data: { refreshTokenHash: null, tokenVersion: { increment: 1 } },
+    });
+  });
+
+  it('treats a failed compare-and-swap as reuse and revokes the stored session', async () => {
+    prisma.user.findUnique.mockResolvedValue({ ...user, refreshTokenHash: 'stored-hash' });
+    prisma.user.updateMany.mockResolvedValue({ count: 0 });
+    prisma.user.update.mockResolvedValue(user);
+    jwt.verifyAsync.mockResolvedValue({ sub: user.id, tokenVersion: 0 });
+    jest.spyOn(argon2, 'verify').mockResolvedValue(true);
+
+    await expect(service.refresh(user.id, 'refresh-token')).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: user.id },
+      data: { refreshTokenHash: null, tokenVersion: { increment: 1 } },
+    });
   });
 
   it('invalidates the session when a validly signed rotated refresh token is replayed', async () => {

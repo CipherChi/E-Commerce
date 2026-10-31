@@ -18,7 +18,7 @@ describe('Express error middleware', () => {
     app.use(errorHandler(logger));
 
     const bad = await request(app).get('/bad?q=1').expect(400);
-    expect(bad.body).toMatchObject({ statusCode: 400, message: { statusCode: 400 }, path: '/bad?q=1', requestId: expect.any(String) });
+    expect(bad.body).toMatchObject({ statusCode: 400, message: { statusCode: 400 }, path: '/bad', requestId: expect.any(String) });
     const crash = await request(app).get('/crash').expect(500);
     expect(crash.body.message).toBe('Internal server error');
     expect(JSON.stringify(crash.body)).not.toContain('private detail');
@@ -30,9 +30,9 @@ describe('Express error middleware', () => {
     const safeLog = JSON.parse(logger.error.mock.calls[2][0]);
     expect(safeLog.path).toBe('/receipts/public/:token');
     expect(JSON.stringify(safeLog)).not.toContain('capability-token');
-    await request(app).get('/pre-route/access-secret-token').expect(500);
+    await request(app).get('/pre-route/access-secret-32-characters-long-000-token').expect(500);
     const unmatchedLog = JSON.parse(logger.error.mock.calls[3][0]);
     expect(unmatchedLog.path).toBe('unmatched');
-    expect(JSON.stringify(unmatchedLog)).not.toContain('access-secret-token');
+    expect(JSON.stringify(unmatchedLog)).not.toContain('access-secret-32-characters-long-000-token');
   });
 });

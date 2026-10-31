@@ -1,47 +1,47 @@
-# Architecture Decision: Modular Monolith
+# Architecture Decision: Express API Monolith
 
-**Status:** Accepted
+**Status:** Accepted  
 **Date:** 2026-10-20
 
 ## Decision
 
-Keep the API as a NestJS modular monolith. Do not split the current domains into
-independently deployed microservices, add an API gateway, or add a message
-broker. Ratings, reviews, and search will be implemented as NestJS modules in
-`apps/api` and will use the existing PostgreSQL database and Prisma schema.
+Keep the API as a modular Express monolith. Do not split the current domains
+into independently deployed services, add an API gateway, or add a message
+broker. New domains use the existing PostgreSQL database and Prisma schema.
 
 ## Current shape
 
-The pnpm workspace contains the Next.js frontend (`apps/web`), NestJS API
+The pnpm workspace contains the Next.js frontend (`apps/web`), Express API
 (`apps/api`), and shared contracts/types (`packages/shared-types`). The API
-modules are registered in `apps/api/src/app.module.ts`. Domains currently
-include auth, businesses, bookings, properties, rooms, customers, catalog,
-inventory, sales, expenses, dashboard, receipts, activity logs, and payments.
-Prisma/PostgreSQL is the API's shared persistence layer. `infra/docker-compose.yml`
-is for local PostgreSQL and Adminer; it is not a service deployment topology.
+starts from `src/server.ts` and builds an application through the `createApp`
+factory in `src/app.ts`. The factory configures security, CORS, JSON parsing,
+cookies, request IDs, logging, routes, and error handling without binding a
+port, so production and tests share the same setup.
 
-## Module ownership and dependencies
+Route registration lives in `src/routes/`. Route handlers call domain
+controllers and services under `src/<domain>/`; Prisma/PostgreSQL is the
+shared persistence layer. Middleware under `src/middleware/` handles auth,
+authorization, rate limiting, request logging, not-found responses, and
+errors. Zod schemas under `src/validation/` validate API bodies and queries,
+including the auth schemas and route validation registry. The API uses
+`infra/docker-compose.yml` for local PostgreSQL and Adminer; it is not a
+service deployment topology.
 
-Each domain module owns the business rules and writes for its domain tables.
-Other modules must use the owning module's exported application service rather
-than directly querying or mutating another module's Prisma models. Shared
-cross-domain read models should be exposed through an explicit application
-service. New modules must export only the services and DTOs needed by consumers.
+## Domain ownership
 
-This is a target boundary for new work, not a claim that all current code
-already follows it. Existing cross-domain Prisma access should be treated as
-technical debt and changed only when touched by scoped work. In particular,
-payments and reporting/customer views currently read related booking, invoice,
-and payment records directly.
+Each domain owns its business rules and writes for its tables. Other domains
+should use the owning domain's service rather than directly querying or
+mutating another domain's Prisma models. Shared cross-domain read models should
+be exposed through an explicit service. Existing cross-domain Prisma access is
+technical debt and should be changed when touched by scoped work.
 
-## Adding domain modules
+## Adding domains
 
-Search, ratings, and reviews will each have a NestJS module, controller,
-service, DTOs, and tests under `apps/api/src/<domain>/`. Their data models and
-migrations remain in the shared Prisma schema. Every tenant-owned operation
-must scope access by `businessId`, and authorization remains enforced by API
-guards/services. Cross-domain workflows call exported services in-process;
-they do not introduce a broker or direct module-to-module database access.
+Add a domain's routes, controller/service, validation schemas, and tests under
+`apps/api/src/<domain>/`. Keep data models and migrations in the shared Prisma
+schema. Every tenant-owned operation must scope access by `businessId`, and
+authorization remains enforced by middleware and services. Cross-domain
+workflows call services in-process.
 
 ## Future extraction path
 
@@ -50,3 +50,9 @@ its data ownership and service boundary explicit, then define a versioned API
 or event contract, service authentication, retries/timeouts, and an ownership-
 preserving data migration. Extraction requires a separate architecture
 decision; this document does not authorize a gateway, broker, or service split.
+
+## Migration record
+
+The API previously used NestJS modules and Swagger/OpenAPI documentation. The
+Express migration removed that runtime and documentation endpoint. Historical
+details are recorded in [`docs/express-migration-plan.md`](express-migration-plan.md).

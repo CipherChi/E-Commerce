@@ -21,8 +21,8 @@ export default defineConfig({
       timeout: 120_000,
       env: {
         DATABASE_URL: process.env.DATABASE_URL,
-        JWT_ACCESS_SECRET: process.env.JWT_ACCESS_SECRET ?? 'playwright-retail-access-secret',
-        JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET ?? 'playwright-retail-refresh-secret',
+        JWT_ACCESS_SECRET: process.env.JWT_ACCESS_SECRET ?? 'playwright-retail-access-secret-at-least-32-characters',
+        JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET ?? 'playwright-retail-refresh-secret-at-least-32-characters',
         API_PORT: process.env.PLAYWRIGHT_API_PORT ?? '3001',
         API_ORIGIN: apiUrl,
         WEB_ORIGIN: webUrl,

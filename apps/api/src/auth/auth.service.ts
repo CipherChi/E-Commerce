@@ -105,13 +105,27 @@ export class AuthService {
       throw new UnauthorizedException('Invalid refresh token');
     }
     if (!(await argon2.verify(user.refreshTokenHash, token))) {
-      await this.prisma.user.update({
-        where: { id: userId },
-        data: { refreshTokenHash: null, tokenVersion: { increment: 1 } },
-      });
+      await this.invalidateRefreshSession(userId);
       throw new UnauthorizedException('Invalid refresh token');
     }
-    return this.issueTokens(user);
+
+    // Prepare the replacement before the write, then swap only if the verified
+    // hash and token version are still current. A concurrent replay will miss
+    // this compare-and-swap and invalidate the session below.
+    const { session, refreshTokenHash } = await this.createTokens(user);
+    const swapped = await this.prisma.user.updateMany({
+      where: {
+        id: userId,
+        refreshTokenHash: user.refreshTokenHash,
+        tokenVersion: user.tokenVersion ?? 0,
+      },
+      data: { refreshTokenHash },
+    });
+    if (swapped.count !== 1) {
+      await this.invalidateRefreshSession(userId);
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+    return session;
   }
 
   async me(userId: string) {
@@ -150,7 +164,29 @@ export class AuthService {
     return { success: true };
   }
 
+  private invalidateRefreshSession(userId: string) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { refreshTokenHash: null, tokenVersion: { increment: 1 } },
+    });
+  }
+
   private async issueTokens(user: {
+    id: string;
+    email: string;
+    name: string;
+    role: string;
+    tokenVersion?: number;
+  }) {
+    const { session, refreshTokenHash } = await this.createTokens(user);
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { refreshTokenHash },
+    });
+    return session;
+  }
+
+  private async createTokens(user: {
     id: string;
     email: string;
     name: string;
@@ -172,14 +208,13 @@ export class AuthService {
       secret: this.config.getOrThrow('JWT_REFRESH_SECRET'),
       expiresIn: '7d',
     });
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: { refreshTokenHash: await argon2.hash(refreshToken) },
-    });
     return {
-      accessToken,
-      refreshToken,
-      user: { id: user.id, email: user.email, name: user.name, role: user.role },
+      session: {
+        accessToken,
+        refreshToken,
+        user: { id: user.id, email: user.email, name: user.name, role: user.role },
+      },
+      refreshTokenHash: await argon2.hash(refreshToken),
     };
   }
 }

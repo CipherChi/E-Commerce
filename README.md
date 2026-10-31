@@ -1,38 +1,66 @@
 # Hotel / Short-let Business Manager
 
-Phase 1 monorepo for reservation-to-cash operations, built with Next.js, NestJS, Prisma, and PostgreSQL. Payments are recorded manually. Paystack, Termii, WhatsApp, and offline sync remain out of scope until Phase 2.
+A pnpm monorepo for reservation-to-cash operations. It contains a Next.js App Router web app (`apps/web`), an Express 4 TypeScript API (`apps/api`), Prisma, and PostgreSQL. Payments are recorded manually; Paystack, Termii, WhatsApp, and offline sync are outside the current scope.
 
 ## Requirements
 
 - Node.js 20 or newer
-- pnpm 9
-- Docker Desktop with the Linux container engine running
+- Corepack and pnpm 9.15.0 (`corepack pnpm` uses the pinned package manager)
+- Docker with Compose for local PostgreSQL, or a PostgreSQL 16 database you manage
 
-## Local setup
+## First-time setup
 
-1. Install the locked dependencies with `corepack pnpm install --frozen-lockfile`.
-2. Copy `.env.example` to `.env` and `apps/api/.env.example` to `apps/api/.env`; set distinct random JWT secrets and an administrator email, name, and password of at least 12 characters in the API environment.
-3. Start PostgreSQL with `docker compose -f infra/docker-compose.yml up -d postgres`.
-4. Apply migrations and create the administrator with `corepack pnpm --filter api exec prisma migrate deploy` and `corepack pnpm --filter api prisma:seed`.
-5. Start the API and web app in separate terminals with `corepack pnpm dev:api` and `corepack pnpm dev:web`, then open <http://localhost:3000>.
+Run commands from the repository root.
 
-Sign in with the seeded administrator account, or register an account and create a business. Business owners can add properties and rooms. Customers and all property records are scoped to the active business; use `/customers` to add, search, edit, and archive customer records.
+1. Install dependencies: `corepack pnpm install --frozen-lockfile`.
+2. Copy `.env.example` to `.env` and `apps/api/.env.example` to `apps/api/.env`. Set distinct random `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` values of at least 32 characters, plus the API `DATABASE_URL`, `WEB_ORIGIN`, and seed administrator fields.
+3. Start local PostgreSQL: `docker compose -f infra/docker-compose.yml up -d postgres`.
+4. Apply database migrations and create the seed administrator:
 
-Local development and tenant-isolation tests use separate databases on the same `infra` PostgreSQL server at `localhost:5432`: `hotel_manager` for the app and `hotel_manager_test` for tests. CI creates its own ephemeral `app_test` database; no extra local CI database container is needed.
+   ```sh
+   corepack pnpm --filter api exec prisma migrate deploy
+   corepack pnpm --filter api prisma:seed
+   ```
 
-Configure `SWAGGER_USERNAME` and `SWAGGER_PASSWORD` to use the API docs; `/api/docs` and its OpenAPI documents require HTTP Basic authentication and return unavailable when credentials are unset. Set `REDIS_URL` to use shared Redis-backed API throttling across instances; when unset, throttling uses in-memory storage for local development. `TRUST_PROXY` defaults to `false`; set it to a trusted proxy hop count (for example, `1`) so throttling can use the forwarded client IP. Boolean `true` is ignored to avoid trusting arbitrary forwarded headers.
+5. Start the API and web app in separate terminals:
 
-Login uses uniform credential errors and per-account progressive lockout beginning after five consecutive failures. A successful login resets the failure count. The account lockout state is persisted in PostgreSQL.
+   ```sh
+   corepack pnpm dev:api
+   corepack pnpm dev:web
+   ```
 
-The tenant-isolation end-to-end suite uses the real `hotel_manager_test` database. Set `TENANT_TEST_DATABASE_URL` to that database in PowerShell, then run:
+6. Open <http://localhost:3000>. Sign in with the administrator configured in `apps/api/.env`, or register an account and create a business.
+
+The default local database is `hotel_manager` at `localhost:5432`. The API loads `apps/api/.env`; Next loads the root `.env`. The checked-in examples contain placeholders only. Never use those values in a deployed environment.
+
+## Common commands
+
+```sh
+corepack pnpm install --frozen-lockfile
+corepack pnpm dev:api
+corepack pnpm dev:web
+corepack pnpm --filter api build
+corepack pnpm --filter web build
+corepack pnpm --filter api lint
+corepack pnpm --filter api test
+corepack pnpm --filter api test:e2e
+```
+
+`test:e2e` includes suites that need a dedicated migrated PostgreSQL database. Configure a separate database named `hotel_manager_test` in `TENANT_TEST_DATABASE_URL` and point `DATABASE_URL` at that same test database before running migrations and tests. In PowerShell:
 
 ```powershell
 $env:TENANT_TEST_DATABASE_URL = "postgresql://user:password@localhost:5432/hotel_manager_test?schema=public"
 $env:DATABASE_URL = $env:TENANT_TEST_DATABASE_URL
 corepack pnpm --filter api exec prisma migrate deploy
-corepack pnpm --filter api test:e2e:tenant
+corepack pnpm --filter api test:e2e
 ```
 
-The test makes two businesses and verifies GET, PATCH, and DELETE for customers, properties, rooms, bookings, payments, and invoices. It refuses to run without the dedicated database URL.
+Do not point either variable at a development, staging, or production database. The e2e tests create and remove test records.
 
-See [Development](docs/DEVELOPMENT.md) for setup and troubleshooting, and [Branching](docs/BRANCHING.md) for the Git workflow. Do not use the sample credentials in production.
+## API contract and runtime notes
+
+The interactive API documentation endpoint is not shipped. The maintained method/path/guard inventory is in [API routes](docs/api-routes.md); the migration plan contains the response and validation contract detail. API health endpoints are `/health/live` and `/health/ready` (also `/health`).
+
+Set `REDIS_URL` to share API throttling across instances. Without Redis, throttling uses in-memory storage, suitable only for a single local process. `TRUST_PROXY` defaults to `false`; set it to the number of trusted proxy hops when deployed behind a known proxy. Login uses a generic credential error and persisted progressive lockout.
+
+See [Deployment](docs/deployment.md), [Backup and restore](docs/backup-restore.md), [Development](docs/DEVELOPMENT.md), and [Branching](docs/BRANCHING.md) for operations and contributor details.

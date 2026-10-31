@@ -1,0 +1,61 @@
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: hotel_manager
+      POSTGRES_USER: hotel_manager
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your deployment environment}
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U hotel_manager -d hotel_manager']
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    networks: [internal]
+
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      API_PORT: 3001
+      DATABASE_URL: postgresql://hotel_manager:${POSTGRES_PASSWORD}@postgres:5432/hotel_manager?schema=public
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?Set JWT_ACCESS_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?Set JWT_REFRESH_SECRET}
+      WEB_ORIGIN: ${WEB_ORIGIN:?Set public WEB_ORIGIN}
+      API_ORIGIN: ${API_ORIGIN:?Set public API_ORIGIN}
+      TRUST_PROXY: ${TRUST_PROXY:-1}
+      REDIS_URL: ${REDIS_URL:-}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+    ports:
+      - "${API_BIND_ADDRESS:-127.0.0.1}:3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [internal]
+
+  web:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?Set public NEXT_PUBLIC_API_URL}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?Set public NEXT_PUBLIC_API_URL}
+    ports:
+      - "${WEB_BIND_ADDRESS:-127.0.0.1}:3000:3000"
+    depends_on: [api]
+    networks: [internal]
+
+volumes:
+  postgres_prod_data:
+
+networks:
+  internal:
+    driver: bridge

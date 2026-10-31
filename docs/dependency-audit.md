@@ -1,4 +1,4 @@
-# Production dependency audit findings
+# Historical production dependency audit findings
 
 **Observed:** 2026-10-20 using `corepack pnpm audit --prod --audit-level high`
 **Result:** 29 production dependency findings: 2 critical, 10 high, 15 moderate,

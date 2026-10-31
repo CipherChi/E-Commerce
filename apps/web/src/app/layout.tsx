@@ -4,6 +4,9 @@ import { PwaShell } from '@/components/PwaShell';
 import { AppLoading } from '@/components/AppLoading';
 import { HeroVideo } from '@/components/HeroVideo';
 
+// Nonce-based CSP requires request-time rendering so each response gets matching nonces.
+export const dynamic = 'force-dynamic';
+
 export const metadata = {
   title: 'Staywise | Hotel Manager',
   description: 'Manage properties, rooms, reservations, and payments.',

@@ -98,9 +98,9 @@ export default function SalesPage() {
     return () => window.clearTimeout(timeout);
   }, [search]);
   useEffect(() => { void apiRequest<{role:string|null}>('/auth/me').then(me => { if(me.role==='OWNER') return apiRequest<Array<{user:StaffMember}>>('/businesses/staff').then(rows=>setStaff(rows.map(row=>row.user))); }).catch(()=>{}); }, []);
-  const itemFor = (line: SaleLine) => line.product ?? items.find((item) => item.id === line.productId);
-  const priceFor = (line: SaleLine) => { const item = itemFor(line); return item?.module === 'LODGING' ? (line.pricingOption === 'PARTY' ? item.partyRate : item.normalRate) : item?.module === 'GYM' ? item.monthlyPrice : item?.sellingPrice ?? '0'; };
-  const total = useMemo(() => sumMoney(lines.map(line => multiplyMoney(priceFor(line), line.quantity))), [lines, items]);
+  const itemFor = useCallback((line: SaleLine) => line.product ?? items.find((item) => item.id === line.productId), [items]);
+  const priceFor = useCallback((line: SaleLine) => { const item = itemFor(line); return item?.module === 'LODGING' ? (line.pricingOption === 'PARTY' ? item.partyRate : item.normalRate) : item?.module === 'GYM' ? item.monthlyPrice : item?.sellingPrice ?? '0'; }, [itemFor]);
+  const total = useMemo(() => sumMoney(lines.map(line => multiplyMoney(priceFor(line), line.quantity))), [lines, priceFor]);
   const historyPageCount = Math.max(1, Math.ceil(salesTotal / salesPageSize));
   const filteredSales = sales;
   const hasHistoryFilters = Boolean(filter || customerFilter || statusFilter || recordedBy || from || to || search);
