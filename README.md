@@ -1,4 +1,4 @@
-# Hotel / Short-let Business Manager
+# E-Commerce
 
 Phase 1 monorepo for reservation-to-cash operations, built with Next.js, NestJS, Prisma, and PostgreSQL. Payments are recorded manually. Paystack, Termii, WhatsApp, and offline sync remain out of scope until Phase 2.
 
