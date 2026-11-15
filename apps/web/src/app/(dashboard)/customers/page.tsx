@@ -31,7 +31,10 @@ export default function CustomersPage() {
     setLoading(true);
     setLoadError('');
     try {
-      const params = new URLSearchParams({ page: String(pageNumber), pageSize: String(customerPageSize) });
+      const params = new URLSearchParams({
+        page: String(pageNumber),
+        pageSize: String(customerPageSize),
+      });
       if (search.trim()) params.set('q', search.trim());
       const result = await apiRequest<CustomerPage>(`/customers?${params}`);
       if (version !== requestVersion.current) return;
@@ -82,7 +85,7 @@ export default function CustomersPage() {
     <main className="mx-auto min-h-screen w-full max-w-6xl px-6 py-10 sm:px-10">
       <header className="flex items-center justify-between">
         <Link className="text-sm font-bold tracking-[0.18em] text-accent" href="/">
-          STAYWISE
+          E Commerce Site
         </Link>
         <Link className="text-sm text-accent" href="/properties">
           Properties →
@@ -165,7 +168,8 @@ export default function CustomersPage() {
             <div>
               <h2 className="text-xl font-semibold">Customer list</h2>
               <p className="mt-1 text-sm text-ink/60">
-                {total} {total === 1 ? 'customer' : 'customers'} · Page {page} of {Math.max(1, Math.ceil(total / customerPageSize))}
+                {total} {total === 1 ? 'customer' : 'customers'} · Page {page} of{' '}
+                {Math.max(1, Math.ceil(total / customerPageSize))}
               </p>
             </div>
             <label className="text-sm font-medium">
@@ -173,7 +177,10 @@ export default function CustomersPage() {
               <input
                 className="mt-2 w-full min-w-64 rounded-xl border border-ink/15 px-4 py-3"
                 value={query}
-                onChange={(event) => { setPage(1); setQuery(event.target.value); }}
+                onChange={(event) => {
+                  setPage(1);
+                  setQuery(event.target.value);
+                }}
                 placeholder="Name or phone number"
                 type="search"
               />
@@ -182,9 +189,16 @@ export default function CustomersPage() {
           {loading ? (
             <p className="text-sm text-ink/60">Loading customers…</p>
           ) : loadError ? (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-ink/10 bg-white p-6 text-sm" role="alert">
+            <div
+              className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-ink/10 bg-white p-6 text-sm"
+              role="alert"
+            >
               <span>Unable to load customers: {loadError}</span>
-              <button type="button" className="font-semibold text-accent underline" onClick={() => void load(query, page)}>
+              <button
+                type="button"
+                className="font-semibold text-accent underline"
+                onClick={() => void load(query, page)}
+              >
                 Retry
               </button>
             </div>
@@ -229,7 +243,10 @@ export default function CustomersPage() {
             </div>
           )}
           {!loading && !loadError && total > customerPageSize && (
-            <nav aria-label="Customer pages" className="mt-4 flex items-center justify-between gap-3">
+            <nav
+              aria-label="Customer pages"
+              className="mt-4 flex items-center justify-between gap-3"
+            >
               <button
                 type="button"
                 className="min-h-11 rounded-xl border border-ink/15 px-4 py-2 text-sm disabled:opacity-50"
@@ -238,7 +255,9 @@ export default function CustomersPage() {
               >
                 Previous
               </button>
-              <span className="text-sm text-ink/60">Page {page} of {Math.max(1, Math.ceil(total / customerPageSize))}</span>
+              <span className="text-sm text-ink/60">
+                Page {page} of {Math.max(1, Math.ceil(total / customerPageSize))}
+              </span>
               <button
                 type="button"
                 className="min-h-11 rounded-xl border border-ink/15 px-4 py-2 text-sm disabled:opacity-50"

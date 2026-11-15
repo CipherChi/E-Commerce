@@ -5,9 +5,22 @@ import { AppLoading } from '@/components/AppLoading';
 import { HeroVideo } from '@/components/HeroVideo';
 
 export const metadata = {
-  title: 'Staywise | Hotel Manager',
-  description: 'Manage properties, rooms, reservations, and payments.',
+  title: 'E Commerce Site',
+  description:
+    'Multi-tenant business tools for property operations, catalog, inventory, sales, receipts, and reporting.',
   manifest: '/manifest.json',
+  openGraph: {
+    title: 'E Commerce Site',
+    description:
+      'Multi-tenant business tools for property operations, catalog, inventory, sales, receipts, and reporting.',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'E Commerce Site',
+    description:
+      'Multi-tenant business tools for property operations, catalog, inventory, sales, receipts, and reporting.',
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

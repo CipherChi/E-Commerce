@@ -7,8 +7,8 @@
   "coverageDirectory": "../coverage",
   "coverageThreshold": {
     "global": { "statements": 19 },
-    "src/bookings/bookings.service.ts": { "statements": 50 },
-    "src/payments/payments.service.ts": { "statements": 55 }
+    "src/bookings/bookings.service.ts": { "statements": 80 },
+    "src/payments/payments.service.ts": { "statements": 80 }
   },
   "testEnvironment": "node"
 }

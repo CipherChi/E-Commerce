@@ -37,12 +37,13 @@ export default function BusinessSetupPage() {
   return (
     <main className="mx-auto min-h-screen w-full max-w-2xl px-6 py-12">
       <Link className="text-sm font-bold tracking-[0.18em] text-accent" href="/">
-        STAYWISE
+        E Commerce Site
       </Link>
       <section className="mt-8 rounded-3xl border border-ink/10 bg-white p-8 shadow-sm sm:p-10">
         <h1 className="text-3xl font-semibold">Set up your business</h1>
         <p className="mt-2 text-sm text-ink/65">
-          Your primary business type is set during signup. You can enable more modules later in Settings.
+          Your primary business type is set during signup. You can enable more modules later in
+          Settings.
         </p>
         <form className="mt-8 space-y-5" onSubmit={submit}>
           <label className="block text-sm font-medium">

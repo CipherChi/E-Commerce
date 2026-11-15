@@ -21,7 +21,10 @@ type Booking = {
     property: { id: string; name: string };
   };
 };
-const cash = (value: string) => { const [whole, fraction = '00'] = value.split('.'); return `₦${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}.${fraction.padEnd(2, '0')}`; };
+const cash = (value: string) => {
+  const [whole, fraction = '00'] = value.split('.');
+  return `₦${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}.${fraction.padEnd(2, '0')}`;
+};
 
 export default function BookingDetailPage() {
   const { bookingId } = useParams<{ bookingId: string }>();
@@ -56,19 +59,25 @@ export default function BookingDetailPage() {
   }
 
   async function createInvoice() {
-    setWorking(true); setError('');
+    setWorking(true);
+    setError('');
     try {
-      const invoice = await apiRequest<{ id: string }>(`/bookings/${bookingId}/invoice`, { method: 'POST' });
+      const invoice = await apiRequest<{ id: string }>(`/bookings/${bookingId}/invoice`, {
+        method: 'POST',
+      });
       setInvoiceId(invoice.id);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to create invoice'); }
-    finally { setWorking(false); }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to create invoice');
+    } finally {
+      setWorking(false);
+    }
   }
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-4xl px-6 py-10 sm:px-10">
       <header className="flex items-center justify-between">
         <Link className="text-sm font-bold tracking-[0.18em] text-accent" href="/">
-          STAYWISE
+          E Commerce Site
         </Link>
         <Link className="text-sm text-accent" href="/bookings">
           ← Bookings
@@ -103,9 +112,7 @@ export default function BookingDetailPage() {
             <article className="rounded-2xl border border-ink/10 bg-white p-6">
               <h2 className="font-semibold">Guest and total</h2>
               <p className="mt-3">{booking.customer.phone}</p>
-              <p className="mt-2 text-lg font-semibold">
-                {cash(booking.totalAmount)}
-              </p>
+              <p className="mt-2 text-lg font-semibold">{cash(booking.totalAmount)}</p>
             </article>
           </section>
           <section className="mt-8 rounded-2xl border border-ink/10 bg-white p-6">
@@ -114,7 +121,22 @@ export default function BookingDetailPage() {
               Room status: {booking.room.status.toLowerCase().replace('_', ' ')}
             </p>
             <div className="mt-5 flex flex-wrap gap-3">
-              {invoiceId ? <Link className="rounded-xl border border-ink/15 px-5 py-3 font-semibold" href={`/invoices/${invoiceId}`}>Open invoice and payments</Link> : <button className="rounded-xl border border-ink/15 px-5 py-3 font-semibold disabled:opacity-50" disabled={working} onClick={() => void createInvoice()}>Create / open invoice</button>}
+              {invoiceId ? (
+                <Link
+                  className="rounded-xl border border-ink/15 px-5 py-3 font-semibold"
+                  href={`/invoices/${invoiceId}`}
+                >
+                  Open invoice and payments
+                </Link>
+              ) : (
+                <button
+                  className="rounded-xl border border-ink/15 px-5 py-3 font-semibold disabled:opacity-50"
+                  disabled={working}
+                  onClick={() => void createInvoice()}
+                >
+                  Create / open invoice
+                </button>
+              )}
               {booking.status === 'PENDING' && (
                 <>
                   <button

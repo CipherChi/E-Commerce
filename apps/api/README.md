@@ -1,17 +1,17 @@
 # API
 
-The API is an Express 4 application written in TypeScript. Copy `apps/api/.env.example` to `apps/api/.env`, set the required database and JWT secrets, and apply migrations with `corepack pnpm --filter api exec prisma migrate deploy`.
+The API is an Express 4 application written in TypeScript. Copy `apps/api/.env.example` to `apps/api/.env`, set the required database and JWT secrets, and apply migrations with `pnpm --filter api exec prisma migrate deploy`.
 
 From the repository root:
 
-- `corepack pnpm --filter api start:dev` runs the API with reload.
-- `corepack pnpm --filter api build` compiles to `apps/api/dist`.
-- `corepack pnpm --filter api start` runs the compiled server.
-- `corepack pnpm --filter api lint` runs ESLint on API TypeScript sources.
-- `corepack pnpm --filter api test` runs unit tests.
-- `corepack pnpm --filter api test:e2e` runs e2e tests.
+- `pnpm --filter api start:dev` runs the API with reload.
+- `pnpm --filter api build` compiles to `apps/api/dist`.
+- `pnpm --filter api start` runs the compiled server.
+- `pnpm --filter api lint` runs ESLint on API TypeScript sources.
+- `pnpm --filter api test` runs unit tests.
+- `pnpm --filter api test:e2e` runs e2e tests.
 
-Tests that exercise tenant isolation use a dedicated Postgres database. Set `TENANT_TEST_DATABASE_URL` in `.env`, export that URL as `DATABASE_URL`, and run Prisma migrations against it before `corepack pnpm --filter api test:e2e`.
+Tests that exercise tenant isolation use a dedicated Postgres database. Set `TENANT_TEST_DATABASE_URL` in `.env`, export that URL as `DATABASE_URL`, and run Prisma migrations against it before `pnpm --filter api test:e2e`.
 
 The previous Nest Swagger UI at `/api/docs` is not currently served. Route and DTO contracts are documented in [`docs/express-migration-plan.md`](../../docs/express-migration-plan.md); that route inventory is also used by the route-parity test.
 

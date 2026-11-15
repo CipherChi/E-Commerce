@@ -66,13 +66,24 @@ export default function ProductsPage() {
     }
   }, [module, category, archived, searchTerm, page]);
   useEffect(() => {
-    const primaryModule: Record<string, Item['module']> = { HOTEL: 'LODGING', APARTMENT: 'LODGING', RESTAURANT: 'FOOD', GYM: 'GYM', SUPERMARKET: 'FOOD' };
-    const initialModule = primaryModule[sessionStorage.getItem('staywise.primaryType') ?? ''] ?? 'LODGING';
+    const primaryModule: Record<string, Item['module']> = {
+      HOTEL: 'LODGING',
+      APARTMENT: 'LODGING',
+      RESTAURANT: 'FOOD',
+      GYM: 'GYM',
+      SUPERMARKET: 'FOOD',
+    };
+    const initialModule =
+      primaryModule[sessionStorage.getItem('staywise.primaryType') ?? ''] ?? 'LODGING';
     setModule(initialModule);
     setFormModule(initialModule);
-    void apiRequest<Array<{module: Item['module']; isEnabled: boolean}>>('/businesses/modules').then(rows => setEnabledModules(rows.filter(r => r.isEnabled).map(r => r.module))).catch(() => {});
+    void apiRequest<Array<{ module: Item['module']; isEnabled: boolean }>>('/businesses/modules')
+      .then((rows) => setEnabledModules(rows.filter((r) => r.isEnabled).map((r) => r.module)))
+      .catch(() => {});
   }, []);
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
   useEffect(() => {
     const timer = window.setTimeout(() => setSearchTerm(search.trim()), 250);
     return () => window.clearTimeout(timer);
@@ -88,9 +99,18 @@ export default function ProductsPage() {
       name: form.get('name'),
       module: kind,
       category: form.get('category') || undefined,
-      ...(kind === 'LODGING' ? { normalRate: String(form.get('normalRate')), partyRate: String(form.get('partyRate')) } : {}),
+      ...(kind === 'LODGING'
+        ? { normalRate: String(form.get('normalRate')), partyRate: String(form.get('partyRate')) }
+        : {}),
       ...(kind === 'GYM' ? { monthlyPrice: String(form.get('monthlyPrice')) } : {}),
-      ...(['FOOD', 'BEVERAGE'].includes(kind) ? { sellingPrice: String(form.get('sellingPrice')), ...(stockable && form.get('costPrice') ? { costPrice: String(form.get('costPrice')) } : {}) } : {}),
+      ...(['FOOD', 'BEVERAGE'].includes(kind)
+        ? {
+            sellingPrice: String(form.get('sellingPrice')),
+            ...(stockable && form.get('costPrice')
+              ? { costPrice: String(form.get('costPrice')) }
+              : {}),
+          }
+        : {}),
       isStockable: stockable,
       lowStockThreshold:
         stockable && form.get('lowStockThreshold') !== ''
@@ -158,7 +178,7 @@ export default function ProductsPage() {
     <main className="mx-auto min-h-screen max-w-7xl px-5 py-8 sm:px-10">
       <header className="flex items-center justify-between">
         <Link className="font-bold tracking-[.18em] text-accent" href="/">
-          STAYWISE
+          E Commerce Site
         </Link>
         <nav className="flex gap-4 text-sm">
           <Link href="/inventory">Inventory</Link>
@@ -171,7 +191,10 @@ export default function ProductsPage() {
         <p className="text-sm font-semibold uppercase tracking-[.18em] text-accent">Catalog</p>
         <h1 className="mt-2 text-4xl font-semibold">Products &amp; services</h1>
         <p className="mt-2 text-ink/60">
-          Manage catalog items across your enabled service modules. <Link className="text-accent" href="/settings">Add another service from Settings anytime: Food, Beverage, or Gym.</Link>
+          Manage catalog items across your enabled service modules.{' '}
+          <Link className="text-accent" href="/settings">
+            Add another service from Settings anytime: Food, Beverage, or Gym.
+          </Link>
         </p>
       </div>
       <section className="mt-8 grid gap-8 lg:grid-cols-[350px_1fr]">
@@ -211,7 +234,11 @@ export default function ProductsPage() {
               }}
               className={field}
             >
-              {enabledModules.map(m => <option key={m} value={m}>{m}</option>)}
+              {enabledModules.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
             </select>
           </label>
           <label className="mt-4 block text-sm font-medium">
@@ -219,18 +246,93 @@ export default function ProductsPage() {
             <input
               name="category"
               defaultValue={editing?.category ?? ''}
-              placeholder={formModule === 'LODGING' ? 'e.g. Apartment Rate' : formModule === 'GYM' ? 'e.g. Membership' : formModule === 'FOOD' ? 'e.g. Meals' : 'e.g. Beverages'}
+              placeholder={
+                formModule === 'LODGING'
+                  ? 'e.g. Apartment Rate'
+                  : formModule === 'GYM'
+                    ? 'e.g. Membership'
+                    : formModule === 'FOOD'
+                      ? 'e.g. Meals'
+                      : 'e.g. Beverages'
+              }
               className={field}
             />
           </label>
           <div key={formModule} className="mt-4 grid grid-cols-2 gap-3">
-            {formModule === 'LODGING' && <>
-              <label className="text-sm font-medium">Normal rate<input name="normalRate" type="number" min="0" step="0.01" required placeholder="0" defaultValue={editing?.normalRate ?? ''} className={field} /></label>
-              <label className="text-sm font-medium">Party rate<input name="partyRate" type="number" min="0" step="0.01" required placeholder="0" defaultValue={editing?.partyRate ?? ''} className={field} /></label>
-            </>}
-            {formModule === 'GYM' && <label className="text-sm font-medium">Monthly price<input name="monthlyPrice" type="number" min="0" step="0.01" required placeholder="0" defaultValue={editing?.monthlyPrice ?? ''} className={field} /></label>}
-            {['FOOD', 'BEVERAGE'].includes(formModule) && <label className="text-sm font-medium">Selling price<input name="sellingPrice" type="number" min="0" step="0.01" required placeholder="0" defaultValue={editing?.sellingPrice ?? ''} className={field} /></label>}
-            {stockEnabled && ['FOOD', 'BEVERAGE'].includes(formModule) && <label className="text-sm font-medium">Cost price (optional)<input name="costPrice" type="number" min="0" step="0.01" placeholder="0" defaultValue={editing?.costPrice ?? ''} className={field} /></label>}
+            {formModule === 'LODGING' && (
+              <>
+                <label className="text-sm font-medium">
+                  Normal rate
+                  <input
+                    name="normalRate"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    required
+                    placeholder="0"
+                    defaultValue={editing?.normalRate ?? ''}
+                    className={field}
+                  />
+                </label>
+                <label className="text-sm font-medium">
+                  Party rate
+                  <input
+                    name="partyRate"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    required
+                    placeholder="0"
+                    defaultValue={editing?.partyRate ?? ''}
+                    className={field}
+                  />
+                </label>
+              </>
+            )}
+            {formModule === 'GYM' && (
+              <label className="text-sm font-medium">
+                Monthly price
+                <input
+                  name="monthlyPrice"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  required
+                  placeholder="0"
+                  defaultValue={editing?.monthlyPrice ?? ''}
+                  className={field}
+                />
+              </label>
+            )}
+            {['FOOD', 'BEVERAGE'].includes(formModule) && (
+              <label className="text-sm font-medium">
+                Selling price
+                <input
+                  name="sellingPrice"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  required
+                  placeholder="0"
+                  defaultValue={editing?.sellingPrice ?? ''}
+                  className={field}
+                />
+              </label>
+            )}
+            {stockEnabled && ['FOOD', 'BEVERAGE'].includes(formModule) && (
+              <label className="text-sm font-medium">
+                Cost price (optional)
+                <input
+                  name="costPrice"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="0"
+                  defaultValue={editing?.costPrice ?? ''}
+                  className={field}
+                />
+              </label>
+            )}
           </div>
           {['FOOD', 'BEVERAGE'].includes(formModule) && (
             <label className="mt-4 flex items-center gap-3 text-sm font-medium">
@@ -267,8 +369,20 @@ export default function ProductsPage() {
           <div className="mb-4 flex flex-wrap items-end gap-3">
             <label className="text-sm font-medium">
               Type
-              <select className={field} value={module} onChange={(e) => { setPage(1); setModule(e.target.value); }}>
-                <option value="">All types</option>{enabledModules.map(m => <option key={m} value={m}>{m}</option>)}
+              <select
+                className={field}
+                value={module}
+                onChange={(e) => {
+                  setPage(1);
+                  setModule(e.target.value);
+                }}
+              >
+                <option value="">All types</option>
+                {enabledModules.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
               </select>
             </label>
             <label className="text-sm font-medium">
@@ -276,7 +390,10 @@ export default function ProductsPage() {
               <input
                 className={field}
                 value={category}
-                onChange={(e) => { setPage(1); setCategory(e.target.value); }}
+                onChange={(e) => {
+                  setPage(1);
+                  setCategory(e.target.value);
+                }}
                 placeholder="Filter category"
               />
             </label>
@@ -286,7 +403,10 @@ export default function ProductsPage() {
                 className={field}
                 type="search"
                 value={search}
-                onChange={(e) => { setPage(1); setSearch(e.target.value); }}
+                onChange={(e) => {
+                  setPage(1);
+                  setSearch(e.target.value);
+                }}
                 placeholder="Item name"
               />
             </label>
@@ -294,7 +414,10 @@ export default function ProductsPage() {
               <input
                 type="checkbox"
                 checked={archived}
-                onChange={(e) => { setPage(1); setArchived(e.target.checked); }}
+                onChange={(e) => {
+                  setPage(1);
+                  setArchived(e.target.checked);
+                }}
               />
               Archived items
             </label>
@@ -316,43 +439,53 @@ export default function ProductsPage() {
               <span>Stock / action</span>
             </div>
             {loading ? (
-              <p className="p-8 text-center text-sm text-ink/55" role="status">Loading catalog…</p>
-            ) : items.map((item) => (
-              <article
-                key={item.id}
-                className="grid gap-2 border-t border-ink/5 px-5 py-4 sm:grid-cols-[1.5fr_0.8fr_1fr_0.8fr_1fr] sm:items-center sm:gap-3"
-              >
-                <div>
-                  <p className="font-semibold">{item.name}</p>
-                  {item.isArchived && <span className="text-xs text-ink/45">Archived</span>}
-                </div>
-                <span className="text-sm text-ink/65">{item.module}</span>
-                <span className="text-sm text-ink/65">{item.category ?? '—'}</span>
-                <span className="text-sm">{item.module === 'LODGING' ? `Normal: ${formatMoney(item.normalRate)} / Party: ${formatMoney(item.partyRate)}` : item.module === 'GYM' ? `${formatMoney(item.monthlyPrice)} / month` : formatMoney(item.sellingPrice)}</span>
-                <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm">
-                  <span className="text-ink/55">
-                    {item.isStockable ? `${item.currentQuantity ?? 0} on hand` : 'Non-stockable'}
+              <p className="p-8 text-center text-sm text-ink/55" role="status">
+                Loading catalog…
+              </p>
+            ) : (
+              items.map((item) => (
+                <article
+                  key={item.id}
+                  className="grid gap-2 border-t border-ink/5 px-5 py-4 sm:grid-cols-[1.5fr_0.8fr_1fr_0.8fr_1fr] sm:items-center sm:gap-3"
+                >
+                  <div>
+                    <p className="font-semibold">{item.name}</p>
+                    {item.isArchived && <span className="text-xs text-ink/45">Archived</span>}
+                  </div>
+                  <span className="text-sm text-ink/65">{item.module}</span>
+                  <span className="text-sm text-ink/65">{item.category ?? '—'}</span>
+                  <span className="text-sm">
+                    {item.module === 'LODGING'
+                      ? `Normal: ${formatMoney(item.normalRate)} / Party: ${formatMoney(item.partyRate)}`
+                      : item.module === 'GYM'
+                        ? `${formatMoney(item.monthlyPrice)} / month`
+                        : formatMoney(item.sellingPrice)}
                   </span>
-                  {!archived && (
-                    <>
-                      <button
-                        className="text-accent"
-                        onClick={() => {
-                          setEditing(item);
-                          setFormModule(item.module);
-                          setStockEnabled(item.isStockable);
-                        }}
-                      >
-                        Edit
-                      </button>
-                      <button className="text-red-700" onClick={() => void archive(item)}>
-                        Archive
-                      </button>
-                    </>
-                  )}
-                </div>
-              </article>
-            ))}
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm">
+                    <span className="text-ink/55">
+                      {item.isStockable ? `${item.currentQuantity ?? 0} on hand` : 'Non-stockable'}
+                    </span>
+                    {!archived && (
+                      <>
+                        <button
+                          className="text-accent"
+                          onClick={() => {
+                            setEditing(item);
+                            setFormModule(item.module);
+                            setStockEnabled(item.isStockable);
+                          }}
+                        >
+                          Edit
+                        </button>
+                        <button className="text-red-700" onClick={() => void archive(item)}>
+                          Archive
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </article>
+              ))
+            )}
             {!loading && !items.length && (
               <p className="p-8 text-center text-sm text-ink/55">
                 No catalog items match these filters.
@@ -360,7 +493,10 @@ export default function ProductsPage() {
             )}
           </div>
           {!loading && total > catalogPageSize && (
-            <nav aria-label="Catalog pages" className="mt-4 flex items-center justify-between gap-3">
+            <nav
+              aria-label="Catalog pages"
+              className="mt-4 flex items-center justify-between gap-3"
+            >
               <button
                 type="button"
                 className="min-h-11 rounded-xl border border-ink/15 px-4 py-2 text-sm disabled:opacity-50"
@@ -369,7 +505,9 @@ export default function ProductsPage() {
               >
                 Previous
               </button>
-              <span className="text-sm text-ink/60">Page {page} of {Math.ceil(total / catalogPageSize)}</span>
+              <span className="text-sm text-ink/60">
+                Page {page} of {Math.ceil(total / catalogPageSize)}
+              </span>
               <button
                 type="button"
                 className="min-h-11 rounded-xl border border-ink/15 px-4 py-2 text-sm disabled:opacity-50"

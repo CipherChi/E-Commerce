@@ -207,6 +207,6 @@ jobs:
           NEEDS_JSON: ${{ toJSON(needs) }}
         run: |
           echo "$NEEDS_JSON"
-          if echo "$NEEDS_JSON" | grep -Eq '"result": "(failure|cancelled)"'; then
+          if ! echo "$NEEDS_JSON" | jq -e 'all(.[]; .result == "success")' >/dev/null; then
             exit 1
           fi

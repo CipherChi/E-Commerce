@@ -6,7 +6,12 @@ import { useParams } from 'next/navigation';
 import { apiRequest } from '@/lib/api';
 import { formatMoney } from '@/lib/money';
 
-type Property = { id: string; name: string; address: string; type: 'HOTEL' | 'SHORTLET' | 'APARTMENT' };
+type Property = {
+  id: string;
+  name: string;
+  address: string;
+  type: 'HOTEL' | 'SHORTLET' | 'APARTMENT';
+};
 type Room = {
   id: string;
   label: string;
@@ -76,7 +81,7 @@ export default function RoomsPage() {
     <main className="mx-auto min-h-screen w-full max-w-6xl px-6 py-10 sm:px-10">
       <header className="flex items-center justify-between">
         <Link className="text-sm font-bold tracking-[0.18em] text-accent" href="/">
-          STAYWISE
+          E Commerce Site
         </Link>
         <Link
           className="text-sm text-accent"
@@ -95,14 +100,18 @@ export default function RoomsPage() {
       </div>
       <section className="mt-9 grid gap-8 lg:grid-cols-[0.8fr_1.2fr]">
         <form className="h-fit rounded-3xl border border-ink/10 bg-white p-6" onSubmit={create}>
-          <h2 className="text-xl font-semibold">{isApartment ? 'Add an apartment' : 'Add a room'}</h2>
+          <h2 className="text-xl font-semibold">
+            {isApartment ? 'Add an apartment' : 'Add a room'}
+          </h2>
           <label className="mt-5 block text-sm font-medium">
             {isApartment ? 'Apartment label' : 'Room label'}
             <input
               className="mt-2 w-full rounded-xl border border-ink/15 px-4 py-3"
               name="label"
               key={`${isApartment ? 'apartment' : 'hotel'}-${rooms.length}`}
-              defaultValue={isApartment ? `Apartment ${rooms.length + 1}` : String(101 + rooms.length)}
+              defaultValue={
+                isApartment ? `Apartment ${rooms.length + 1}` : String(101 + rooms.length)
+              }
               required
             />
           </label>
@@ -171,7 +180,9 @@ export default function RoomsPage() {
         <section>
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-xl font-semibold">{isApartment ? 'Apartments' : 'Rooms'}</h2>
-            <span className="text-sm text-ink/60">{rooms.length} {isApartment ? 'units' : 'total'}</span>
+            <span className="text-sm text-ink/60">
+              {rooms.length} {isApartment ? 'units' : 'total'}
+            </span>
           </div>
           {loading ? (
             <p className="text-sm text-ink/60">Loading rooms…</p>

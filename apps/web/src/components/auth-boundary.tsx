@@ -122,7 +122,7 @@ export function AuthBoundary({ children }: { children: React.ReactNode }) {
   const sidebar = (
     <aside className="flex h-full flex-col bg-primary px-4 py-6 text-white">
       <Link href="/dashboard" className="mb-8 px-3 text-sm font-bold tracking-[.18em] text-ink">
-        STAYWISE
+        E Commerce Site
       </Link>
       <nav className="space-y-1">
         {links.map(([label, href]) => (
@@ -173,7 +173,7 @@ export function AuthBoundary({ children }: { children: React.ReactNode }) {
           >
             ☰ Menu
           </button>
-          <span className="ml-4 text-sm font-semibold">STAYWISE</span>
+          <span className="ml-4 text-sm font-semibold">E Commerce Site</span>
         </div>
         {children}
       </div>

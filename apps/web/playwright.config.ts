@@ -15,7 +15,7 @@ export default defineConfig({
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: [
     {
-      command: 'corepack pnpm --filter api exec tsx src/server.ts',
+      command: 'pnpm --filter api exec tsx src/server.ts',
       url: `${apiUrl}/health`,
       reuseExistingServer: false,
       timeout: 120_000,
@@ -29,7 +29,7 @@ export default defineConfig({
       },
     },
     {
-      command: 'corepack pnpm exec next start --hostname 127.0.0.1',
+      command: 'pnpm exec next start --hostname 127.0.0.1',
       url: webUrl,
       reuseExistingServer: false,
       timeout: 120_000,

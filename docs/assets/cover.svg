@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630" role="img" aria-labelledby="title description">
+  <title id="title">E Commerce Site</title>
+  <desc id="description">Tenant-scoped operations for bookings, customers, invoices and payments, sales, inventory, expenses, dashboards, and receipts.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#071720"/>
+      <stop offset="0.58" stop-color="#0b2a31"/>
+      <stop offset="1" stop-color="#10233a"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.78" cy="0.38" r="0.62">
+      <stop offset="0" stop-color="#2dd4a7" stop-opacity="0.25"/>
+      <stop offset="1" stop-color="#2dd4a7" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#7cf7b0"/>
+      <stop offset="1" stop-color="#2dd4d4"/>
+    </linearGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#fff" stroke-opacity="0.035"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="630" fill="url(#background)"/>
+  <rect width="1200" height="630" fill="url(#grid)"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+  <path d="M0 490C220 405 420 548 640 465S1020 385 1200 450" fill="none" stroke="url(#accent)" stroke-opacity=".35" stroke-width="2"/>
+
+  <g font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+    <rect x="76" y="76" width="174" height="36" rx="18" fill="#7cf7b0" fill-opacity=".12" stroke="#7cf7b0" stroke-opacity=".5"/>
+    <text x="163" y="100" text-anchor="middle" font-size="14" font-weight="700" fill="#9affc7" letter-spacing="1.5">BUSINESS TOOLS</text>
+
+    <text x="76" y="222" font-size="72" font-weight="760" fill="#eafff6">E Commerce</text>
+    <text x="76" y="302" font-size="72" font-weight="760" fill="url(#accent)">Site</text>
+    <text x="80" y="358" font-size="21" fill="#c5ded8">Bookings, customers, invoices and payments;</text>
+    <text x="80" y="389" font-size="21" fill="#c5ded8">sales, inventory, expenses, dashboards, receipts.</text>
+
+    <g font-size="15" font-weight="650" fill="#dcfff0">
+      <rect x="78" y="430" width="130" height="38" rx="19" fill="#fff" fill-opacity=".07" stroke="#fff" stroke-opacity=".2"/>
+      <text x="143" y="454" text-anchor="middle">Next.js 15</text>
+      <rect x="218" y="430" width="126" height="38" rx="19" fill="#fff" fill-opacity=".07" stroke="#fff" stroke-opacity=".2"/>
+      <text x="281" y="454" text-anchor="middle">Express 4</text>
+      <rect x="354" y="430" width="201" height="38" rx="19" fill="#fff" fill-opacity=".07" stroke="#fff" stroke-opacity=".2"/>
+      <text x="454" y="454" text-anchor="middle">Prisma + PostgreSQL</text>
+      <rect x="78" y="480" width="233" height="38" rx="19" fill="#fff" fill-opacity=".07" stroke="#fff" stroke-opacity=".2"/>
+      <text x="194" y="504" text-anchor="middle">Bookings · Sales · Stock</text>
+    </g>
+    <text x="80" y="577" font-size="15" fill="#80a99f" letter-spacing=".6">github.com/CipherChi/E-Commerce</text>
+  </g>
+
+  <g transform="translate(675 105)" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+    <rect width="450" height="340" rx="24" fill="#081b22" fill-opacity=".92" stroke="#7cf7b0" stroke-opacity=".38"/>
+    <circle cx="28" cy="27" r="6" fill="#ff7777"/>
+    <circle cx="49" cy="27" r="6" fill="#ffd166"/>
+    <circle cx="70" cy="27" r="6" fill="#7cf7b0"/>
+    <text x="96" y="33" font-size="14" font-weight="700" fill="#dcfff0">BUSINESS DASHBOARD</text>
+    <rect x="344" y="15" width="78" height="24" rx="12" fill="#fff" fill-opacity=".08"/>
+    <text x="383" y="32" text-anchor="middle" font-size="10" fill="#b9d8ce">THIS WEEK</text>
+
+    <rect x="24" y="56" width="194" height="82" rx="12" fill="#fff" fill-opacity=".055" stroke="#fff" stroke-opacity=".1"/>
+    <text x="40" y="80" font-size="11" font-weight="650" fill="#98b9ae">ACTIVE BOOKINGS</text>
+    <text x="40" y="116" font-size="27" font-weight="700" fill="#eafff6">12</text>
+    <path d="M148 118l12-14 12 7 20-24" fill="none" stroke="#7cf7b0" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <rect x="232" y="56" width="194" height="82" rx="12" fill="#fff" fill-opacity=".055" stroke="#fff" stroke-opacity=".1"/>
+    <text x="248" y="80" font-size="11" font-weight="650" fill="#98b9ae">PAYMENTS RECORDED</text>
+    <text x="248" y="116" font-size="24" font-weight="700" fill="#eafff6">₦840k</text>
+    <circle cx="398" cy="105" r="15" fill="none" stroke="#2dd4d4" stroke-width="5" stroke-dasharray="67 28" transform="rotate(-90 398 105)"/>
+
+    <rect x="24" y="150" width="194" height="82" rx="12" fill="#fff" fill-opacity=".055" stroke="#fff" stroke-opacity=".1"/>
+    <text x="40" y="174" font-size="11" font-weight="650" fill="#98b9ae">SALES</text>
+    <text x="40" y="210" font-size="24" font-weight="700" fill="#eafff6">₦1.2m</text>
+    <rect x="152" y="193" width="8" height="20" rx="3" fill="#2dd4d4"/>
+    <rect x="165" y="183" width="8" height="30" rx="3" fill="#7cf7b0"/>
+    <rect x="178" y="174" width="8" height="39" rx="3" fill="#2dd4d4"/>
+    <rect x="191" y="164" width="8" height="49" rx="3" fill="#7cf7b0"/>
+
+    <rect x="232" y="150" width="194" height="82" rx="12" fill="#fff" fill-opacity=".055" stroke="#fff" stroke-opacity=".1"/>
+    <text x="248" y="174" font-size="11" font-weight="650" fill="#98b9ae">INVENTORY</text>
+    <text x="248" y="208" font-size="20" font-weight="700" fill="#eafff6">Stock tracked</text>
+    <circle cx="399" cy="195" r="15" fill="#7cf7b0" fill-opacity=".18"/>
+    <path d="M392 195l5 5 10-11" fill="none" stroke="#7cf7b0" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <rect x="24" y="244" width="402" height="76" rx="12" fill="#fff" fill-opacity=".04"/>
+    <text x="40" y="268" font-size="11" font-weight="650" fill="#98b9ae">EXPENSES &amp; RECEIPTS</text>
+    <text x="40" y="298" font-size="13" fill="#dcfff0">Expenses logged</text>
+    <text x="204" y="298" font-size="13" fill="#dcfff0">Receipts ready</text>
+    <path d="M334 299h66" stroke="#7cf7b0" stroke-width="5" stroke-linecap="round"/>
+  </g>
+</svg>

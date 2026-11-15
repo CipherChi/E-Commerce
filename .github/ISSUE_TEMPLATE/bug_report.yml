@@ -1,0 +1,30 @@
+name: Bug report
+description: Report a reproducible problem
+title: 'bug: '
+labels: ['type:bug']
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe the observed behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Include the page/API route, tenant role, and test data needed.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment and logs
+      description: Include versions and relevant redacted logs. Never include secrets or customer data.

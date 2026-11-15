@@ -33,7 +33,12 @@ type Sale = {
 };
 type SalesPage = { data: Sale[]; total: number; page: number; pageSize: number };
 type CatalogPage = { data: Item[]; total: number; page: number; pageSize: number };
-type SaleLine = { productId: string; quantity: number; pricingOption: 'NORMAL' | 'PARTY'; product?: Item };
+type SaleLine = {
+  productId: string;
+  quantity: number;
+  pricingOption: 'NORMAL' | 'PARTY';
+  product?: Item;
+};
 const field = 'mt-2 w-full rounded-xl border border-ink/15 bg-white px-4 py-3';
 const money = (n: string | number) => formatMoney(String(n));
 const salesPageSize = 25;
@@ -97,17 +102,49 @@ export default function SalesPage() {
     const timeout = window.setTimeout(() => setSearchTerm(search.trim()), 250);
     return () => window.clearTimeout(timeout);
   }, [search]);
-  useEffect(() => { void apiRequest<{role:string|null}>('/auth/me').then(me => { if(me.role==='OWNER') return apiRequest<Array<{user:StaffMember}>>('/businesses/staff').then(rows=>setStaff(rows.map(row=>row.user))); }).catch(()=>{}); }, []);
-  const itemFor = (line: SaleLine) => line.product ?? items.find((item) => item.id === line.productId);
-  const priceFor = (line: SaleLine) => { const item = itemFor(line); return item?.module === 'LODGING' ? (line.pricingOption === 'PARTY' ? item.partyRate : item.normalRate) : item?.module === 'GYM' ? item.monthlyPrice : item?.sellingPrice ?? '0'; };
-  const total = useMemo(() => sumMoney(lines.map(line => multiplyMoney(priceFor(line), line.quantity))), [lines, items]);
+  useEffect(() => {
+    void apiRequest<{ role: string | null }>('/auth/me')
+      .then((me) => {
+        if (me.role === 'OWNER')
+          return apiRequest<Array<{ user: StaffMember }>>('/businesses/staff').then((rows) =>
+            setStaff(rows.map((row) => row.user)),
+          );
+      })
+      .catch(() => {});
+  }, []);
+  const itemFor = (line: SaleLine) =>
+    line.product ?? items.find((item) => item.id === line.productId);
+  const priceFor = (line: SaleLine) => {
+    const item = itemFor(line);
+    return item?.module === 'LODGING'
+      ? line.pricingOption === 'PARTY'
+        ? item.partyRate
+        : item.normalRate
+      : item?.module === 'GYM'
+        ? item.monthlyPrice
+        : (item?.sellingPrice ?? '0');
+  };
+  const total = useMemo(
+    () => sumMoney(lines.map((line) => multiplyMoney(priceFor(line), line.quantity))),
+    [lines, items],
+  );
   const historyPageCount = Math.max(1, Math.ceil(salesTotal / salesPageSize));
   const filteredSales = sales;
-  const hasHistoryFilters = Boolean(filter || customerFilter || statusFilter || recordedBy || from || to || search);
+  const hasHistoryFilters = Boolean(
+    filter || customerFilter || statusFilter || recordedBy || from || to || search,
+  );
   function addLine() {
     const available = items.find((i) => !lines.some((l) => l.productId === i.id));
-    if (available) setLines([...lines, { productId: available.id, quantity: 1, pricingOption: 'NORMAL', product: available }]);
-    else setLines([...lines, { productId: items[0]?.id ?? '', quantity: 1, pricingOption: 'NORMAL', product: items[0] }]);
+    if (available)
+      setLines([
+        ...lines,
+        { productId: available.id, quantity: 1, pricingOption: 'NORMAL', product: available },
+      ]);
+    else
+      setLines([
+        ...lines,
+        { productId: items[0]?.id ?? '', quantity: 1, pricingOption: 'NORMAL', product: items[0] },
+      ]);
   }
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -124,7 +161,11 @@ export default function SalesPage() {
           paymentMethod: method,
           paymentStatus,
           amountPaid: paymentStatus === 'PARTIAL' ? amountPaid : undefined,
-          items: lines.map((l) => ({ productId: l.productId, quantity: l.quantity, pricingOption: l.pricingOption })),
+          items: lines.map((l) => ({
+            productId: l.productId,
+            quantity: l.quantity,
+            pricingOption: l.pricingOption,
+          })),
         }),
       });
       idempotencyKey.current = null;
@@ -150,7 +191,7 @@ export default function SalesPage() {
     <main className="mx-auto min-h-screen max-w-7xl px-5 py-8 sm:px-10">
       <header className="flex items-center justify-between">
         <Link className="font-bold tracking-[.18em] text-accent" href="/">
-          STAYWISE
+          E Commerce Site
         </Link>
         <nav className="flex gap-4 text-sm">
           <Link href="/products">Catalog</Link>
@@ -176,7 +217,9 @@ export default function SalesPage() {
               value={customerId}
               onChange={setCustomerId}
             />
-            {!customerId && <p className="mt-1 text-xs text-ink/50">Leave blank for a walk-in sale.</p>}
+            {!customerId && (
+              <p className="mt-1 text-xs text-ink/50">Leave blank for a walk-in sale.</p>
+            )}
           </div>
           {!customerId && (
             <label className="mt-4 block text-sm font-medium">
@@ -206,14 +249,40 @@ export default function SalesPage() {
                 <ProductLookup
                   selected={itemFor(line) ?? null}
                   onSelect={(product) =>
-                    setLines(lines.map((current, i) =>
-                      i === index
-                        ? { ...current, productId: product.id, product, pricingOption: 'NORMAL' }
-                        : current,
-                    ))
+                    setLines(
+                      lines.map((current, i) =>
+                        i === index
+                          ? { ...current, productId: product.id, product, pricingOption: 'NORMAL' }
+                          : current,
+                      ),
+                    )
                   }
                 />
-                {itemFor(line)?.module === 'LODGING' && <label className="col-span-full text-xs font-medium text-ink/60">Rate<select value={line.pricingOption} onChange={e => setLines(lines.map((x,i) => i === index ? { ...x, pricingOption: e.target.value as 'NORMAL' | 'PARTY' } : x))} className={field}><option value="NORMAL">Normal rate: {money(itemFor(line)?.normalRate ?? '0')}</option><option value="PARTY">Party rate: {money(itemFor(line)?.partyRate ?? '0')}</option></select></label>}
+                {itemFor(line)?.module === 'LODGING' && (
+                  <label className="col-span-full text-xs font-medium text-ink/60">
+                    Rate
+                    <select
+                      value={line.pricingOption}
+                      onChange={(e) =>
+                        setLines(
+                          lines.map((x, i) =>
+                            i === index
+                              ? { ...x, pricingOption: e.target.value as 'NORMAL' | 'PARTY' }
+                              : x,
+                          ),
+                        )
+                      }
+                      className={field}
+                    >
+                      <option value="NORMAL">
+                        Normal rate: {money(itemFor(line)?.normalRate ?? '0')}
+                      </option>
+                      <option value="PARTY">
+                        Party rate: {money(itemFor(line)?.partyRate ?? '0')}
+                      </option>
+                    </select>
+                  </label>
+                )}
                 <label className="text-xs font-medium text-ink/60">
                   Qty
                   <input
@@ -306,7 +375,10 @@ export default function SalesPage() {
                 Search
                 <input
                   value={search}
-                  onChange={(e) => { setHistoryPage(1); setSearch(e.target.value); }}
+                  onChange={(e) => {
+                    setHistoryPage(1);
+                    setSearch(e.target.value);
+                  }}
                   className={field}
                   placeholder="Guest name"
                 />
@@ -314,14 +386,20 @@ export default function SalesPage() {
               <CustomerLookup
                 label="Customer filter"
                 value={customerFilter}
-                onChange={(id) => { setHistoryPage(1); setCustomerFilter(id); }}
+                onChange={(id) => {
+                  setHistoryPage(1);
+                  setCustomerFilter(id);
+                }}
                 placeholder="Search customers"
               />
               <label className="text-xs font-medium">
                 Payment
                 <select
                   value={filter}
-                  onChange={(e) => { setHistoryPage(1); setFilter(e.target.value); }}
+                  onChange={(e) => {
+                    setHistoryPage(1);
+                    setFilter(e.target.value);
+                  }}
                   className={field}
                 >
                   <option value="">All methods</option>
@@ -334,7 +412,10 @@ export default function SalesPage() {
                 Status
                 <select
                   value={statusFilter}
-                  onChange={(e) => { setHistoryPage(1); setStatusFilter(e.target.value); }}
+                  onChange={(e) => {
+                    setHistoryPage(1);
+                    setStatusFilter(e.target.value);
+                  }}
                   className={field}
                 >
                   <option value="">All statuses</option>
@@ -342,13 +423,35 @@ export default function SalesPage() {
                   <option value="CANCELLED">Cancelled</option>
                 </select>
               </label>
-              {staff.length>0 && <label className="text-xs font-medium">Recorded by<select value={recordedBy} onChange={e=>{setHistoryPage(1);setRecordedBy(e.target.value)}} className={field}><option value="">All staff</option>{staff.map(member=><option key={member.id} value={member.id}>{member.name}</option>)}</select></label>}
+              {staff.length > 0 && (
+                <label className="text-xs font-medium">
+                  Recorded by
+                  <select
+                    value={recordedBy}
+                    onChange={(e) => {
+                      setHistoryPage(1);
+                      setRecordedBy(e.target.value);
+                    }}
+                    className={field}
+                  >
+                    <option value="">All staff</option>
+                    {staff.map((member) => (
+                      <option key={member.id} value={member.id}>
+                        {member.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <label className="text-xs font-medium">
                 From
                 <input
                   type="date"
                   value={from}
-                  onChange={(e) => { setHistoryPage(1); setFrom(e.target.value); }}
+                  onChange={(e) => {
+                    setHistoryPage(1);
+                    setFrom(e.target.value);
+                  }}
                   className={field}
                 />
               </label>
@@ -357,7 +460,10 @@ export default function SalesPage() {
                 <input
                   type="date"
                   value={to}
-                  onChange={(e) => { setHistoryPage(1); setTo(e.target.value); }}
+                  onChange={(e) => {
+                    setHistoryPage(1);
+                    setTo(e.target.value);
+                  }}
                   className={field}
                 />
               </label>
@@ -370,13 +476,23 @@ export default function SalesPage() {
           )}
           <div className="space-y-3">
             {salesLoading ? (
-              <p className="rounded-2xl border border-ink/10 bg-white p-8 text-sm text-ink/55" role="status">
+              <p
+                className="rounded-2xl border border-ink/10 bg-white p-8 text-sm text-ink/55"
+                role="status"
+              >
                 {sales.length > 0 ? 'Refreshing sales history…' : 'Loading sales history…'}
               </p>
             ) : salesLoadError ? (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-ink/10 bg-white p-8 text-sm text-ink/55" role="alert">
+              <div
+                className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-ink/10 bg-white p-8 text-sm text-ink/55"
+                role="alert"
+              >
                 <span>Could not load sales history: {salesLoadError}</span>
-                <button type="button" className="font-semibold text-accent underline" onClick={() => void load()}>
+                <button
+                  type="button"
+                  className="font-semibold text-accent underline"
+                  onClick={() => void load()}
+                >
                   Retry
                 </button>
               </div>
@@ -396,7 +512,8 @@ export default function SalesPage() {
                         </span>
                       </p>
                       <p className="mt-1 text-sm text-ink/55">
-                        {s.paymentMethod} · {s.paymentStatus} · {s._count?.items ?? '—'} lines · Recorded by {s.createdBy?.name ?? '—'}
+                        {s.paymentMethod} · {s.paymentStatus} · {s._count?.items ?? '—'} lines ·
+                        Recorded by {s.createdBy?.name ?? '—'}
                       </p>
                     </div>
                     <p className="font-semibold">{money(s.total)}</p>
@@ -410,7 +527,10 @@ export default function SalesPage() {
             )}
           </div>
           {salesTotal > salesPageSize && (
-            <nav aria-label="Sales history pages" className="mt-4 flex items-center justify-between gap-3">
+            <nav
+              aria-label="Sales history pages"
+              className="mt-4 flex items-center justify-between gap-3"
+            >
               <button
                 type="button"
                 className="min-h-11 rounded-xl border border-ink/15 px-4 py-2 text-sm disabled:opacity-50"
@@ -419,7 +539,9 @@ export default function SalesPage() {
               >
                 Previous
               </button>
-              <span className="text-sm text-ink/60">Page {historyPage} of {historyPageCount}</span>
+              <span className="text-sm text-ink/60">
+                Page {historyPage} of {historyPageCount}
+              </span>
               <button
                 type="button"
                 className="min-h-11 rounded-xl border border-ink/15 px-4 py-2 text-sm disabled:opacity-50"
@@ -462,8 +584,15 @@ export default function SalesPage() {
                 </span>
                 <strong>Total {money(selected.total)}</strong>
               </div>
-              <p className="mt-3 text-sm text-ink/60">Recorded by {selected.createdBy?.name ?? '—'}</p>
-              <Link className="mt-4 inline-flex rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white" href={`/receipts/${selected.id}`}>View receipt</Link>
+              <p className="mt-3 text-sm text-ink/60">
+                Recorded by {selected.createdBy?.name ?? '—'}
+              </p>
+              <Link
+                className="mt-4 inline-flex rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white"
+                href={`/receipts/${selected.id}`}
+              >
+                View receipt
+              </Link>
               {!!selected.movements?.length && (
                 <div className="mt-4 rounded-xl bg-paper p-4">
                   <p className="text-sm font-semibold">Linked stock deductions</p>

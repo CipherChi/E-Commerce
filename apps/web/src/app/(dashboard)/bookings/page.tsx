@@ -128,7 +128,7 @@ export default function BookingsPage() {
     <main className="mx-auto min-h-screen w-full max-w-6xl px-6 py-10 sm:px-10">
       <header className="flex items-center justify-between">
         <Link className="text-sm font-bold tracking-[0.18em] text-accent" href="/">
-          STAYWISE
+          E Commerce Site
         </Link>
         <nav className="flex gap-4 text-sm">
           <Link href="/properties">Properties</Link>
