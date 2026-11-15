@@ -253,7 +253,7 @@ test('reservation booking moves through confirmation, check-in, and checkout', a
   test.setTimeout(120_000);
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const email = `reservation-${suffix}@example.test`;
-  const password = 'ReservationFlow!2026';
+  const password = 'tenant-test-password-123';
   const customerName = `Reservation Guest ${suffix}`;
   const businessName = `Reservation Business ${suffix}`;
   const propertyName = `Reservation Property ${suffix}`;
