@@ -10,7 +10,7 @@ describe('ReceiptsService', () => {
     receiptNumber: 'RCT-2026-000001', createdAt: new Date('2026-10-05T10:00:00Z'),
     subtotal: new Prisma.Decimal('1234.5'), total: new Prisma.Decimal('1234.5'), amountPaid: new Prisma.Decimal('1000'),
     paymentMethod: 'CASH', paymentStatus: 'PARTIAL', guestName: 'Guest',
-    business: { name: 'Staywise', address: 'Lagos', phone: '0800', logo: null },
+    business: { name: 'Example Business', address: 'Lagos', phone: '0800', logo: null },
     createdBy: { name: 'Cashier' }, customer: null,
     items: [{ product: { name: 'Room' }, quantity: 1, unitPrice: new Prisma.Decimal('1234.5'), lineSubtotal: new Prisma.Decimal('1234.5') }],
   };

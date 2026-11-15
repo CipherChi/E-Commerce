@@ -246,4 +246,113 @@ describe('BookingsService', () => {
       include: expect.any(Object),
     });
   });
+
+  it('validates list date windows and supports open-ended filters', async () => {
+    const { tx, service } = fixture();
+    tx.booking.findMany.mockResolvedValue([]);
+    tx.booking.count.mockResolvedValue(0);
+    await expect(service.list(businessId, { from: 'bad-date', page: 1, pageSize: 20 })).rejects.toBeInstanceOf(
+      UnprocessableEntityException,
+    );
+    await expect(
+      service.list(businessId, { from: '2032-03-10', to: '2032-03-01', page: 1, pageSize: 20 }),
+    ).rejects.toThrow('to date must be after');
+    await service.list(businessId, { from: '2032-03-01', page: 1, pageSize: 20 });
+    await service.list(businessId, { to: '2032-03-10', page: 1, pageSize: 20 });
+    await service.list(businessId, { page: 1, pageSize: 20 });
+    expect(tx.booking.findMany).toHaveBeenCalledTimes(3);
+  });
+
+  it('reports availability for missing, maintained, occupied, and free rooms', async () => {
+    const { tx, service } = fixture();
+    await expect(
+      service.availability(businessId, room.id, '2032-02-01', '2032-02-01'),
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
+    tx.room.findFirst.mockResolvedValue(null);
+    await expect(
+      service.availability(businessId, room.id, '2032-02-01', '2032-02-02'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    tx.room.findFirst.mockResolvedValue({ ...room, status: RoomStatus.MAINTENANCE });
+    await expect(
+      service.availability(businessId, room.id, '2032-02-01', '2032-02-02'),
+    ).resolves.toMatchObject({ available: false });
+    tx.room.findFirst.mockResolvedValue(room);
+    tx.booking.findFirst.mockResolvedValue({ id: 'overlap' });
+    await expect(
+      service.availability(businessId, room.id, '2032-02-01', '2032-02-02'),
+    ).resolves.toMatchObject({ available: false });
+    tx.booking.findFirst.mockResolvedValue(null);
+    await expect(
+      service.availability(businessId, room.id, '2032-02-01', '2032-02-02'),
+    ).resolves.toEqual({ available: true });
+  });
+
+  it('rejects maintenance rooms and translates exclusion errors by constraint or SQLSTATE', async () => {
+    const { tx, service } = fixture();
+    tx.room.findFirst.mockResolvedValue({ ...room, status: RoomStatus.MAINTENANCE });
+    await expect(
+      service.create(businessId, {
+        roomId: room.id,
+        customerId: customer.id,
+        checkIn: '2032-02-01',
+        checkOut: '2032-02-02',
+      }),
+    ).rejects.toThrow('out of service');
+    tx.room.findFirst.mockResolvedValue(room);
+    tx.customer.findFirst.mockResolvedValue(customer);
+    tx.booking.create.mockRejectedValue(new Error('23P01 exclusion violation'));
+    await expect(
+      service.create(businessId, {
+        roomId: room.id,
+        customerId: customer.id,
+        checkIn: '2032-02-01',
+        checkOut: '2032-02-02',
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('rejects invalid update operations and detects stale booking writes', async () => {
+    const { tx, service } = fixture();
+    const booking = {
+      id: 'booking-a', businessId, roomId: room.id, customerId: customer.id,
+      status: BookingStatus.PENDING, checkIn: new Date('2032-02-01T00:00:00Z'),
+      checkOut: new Date('2032-02-02T00:00:00Z'), totalAmount: new Prisma.Decimal('125.25'),
+    };
+    tx.booking.findFirst.mockResolvedValue(null);
+    await expect(service.update(businessId, booking.id, {})).rejects.toBeInstanceOf(NotFoundException);
+    tx.booking.findFirst.mockResolvedValue(booking);
+    await expect(service.update(businessId, booking.id, { status: BookingStatus.CANCELLED })).rejects.toBeInstanceOf(ConflictException);
+    await expect(service.update(businessId, booking.id, { checkIn: 'nope' })).rejects.toBeInstanceOf(UnprocessableEntityException);
+    tx.room.findFirst.mockResolvedValue(null);
+    await expect(service.update(businessId, booking.id, { checkOut: '2032-02-03' })).rejects.toBeInstanceOf(NotFoundException);
+    tx.room.findFirst.mockResolvedValue(room);
+    tx.customer.findFirst.mockResolvedValue(customer);
+    tx.booking.updateMany.mockResolvedValue({ count: 0 });
+    await expect(service.update(businessId, booking.id, { source: 'WALK_IN' })).rejects.toThrow('changed during update');
+  });
+
+  it('blocks active deletion and reports a stale delete', async () => {
+    const { tx, service } = fixture();
+    tx.booking.findFirst.mockResolvedValue({ id: 'booking-a', status: BookingStatus.CONFIRMED });
+    await expect(service.remove(businessId, 'booking-a')).rejects.toBeInstanceOf(ConflictException);
+    tx.booking.findFirst.mockResolvedValue({ id: 'booking-a', status: BookingStatus.CANCELLED });
+    tx.booking.deleteMany.mockResolvedValue({ count: 0 });
+    await expect(service.remove(businessId, 'booking-a')).rejects.toThrow('changed during deletion');
+    tx.booking.deleteMany.mockResolvedValue({ count: 1 });
+    await expect(service.remove(businessId, 'booking-a')).resolves.toEqual({ success: true });
+  });
+
+  it('rejects missing and stale transitions and prevents check-in to a maintained room', async () => {
+    const { tx, service } = fixture();
+    tx.booking.findFirst.mockResolvedValue(null);
+    await expect(service.transition(businessId, 'booking-a', BookingStatus.CONFIRMED)).rejects.toBeInstanceOf(NotFoundException);
+    tx.booking.findFirst.mockResolvedValue({ id: 'booking-a', roomId: room.id, status: BookingStatus.CONFIRMED });
+    tx.booking.updateMany.mockResolvedValue({ count: 0 });
+    await expect(service.transition(businessId, 'booking-a', BookingStatus.CHECKED_IN)).rejects.toThrow('changed during transition');
+    tx.booking.updateMany.mockResolvedValue({ count: 1 });
+    tx.room.updateMany.mockResolvedValue({ count: 0 });
+    await expect(service.transition(businessId, 'booking-a', BookingStatus.CHECKED_IN)).rejects.toThrow('out of service');
+    tx.booking.findFirst.mockResolvedValue({ id: 'booking-a', roomId: room.id, status: BookingStatus.CHECKED_IN });
+    await expect(service.transition(businessId, 'booking-a', BookingStatus.CHECKED_OUT)).rejects.toBeInstanceOf(NotFoundException);
+  });
 });
