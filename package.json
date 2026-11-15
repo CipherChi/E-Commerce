@@ -1,5 +1,6 @@
 {
   "name": "hotel-business-manager",
+  "description": "E Commerce Site – multi-tenant retail platform",
   "private": true,
   "packageManager": "pnpm@9.15.0",
   "pnpm": {
@@ -11,32 +12,41 @@
       "prisma"
     ],
     "overrides": {
-      "body-parser@<1.20.6": "1.20.6",
+      "body-parser@<1.20.9": "1.20.9",
       "deepmerge-ts": "^8.0.0",
       "js-yaml@<4.3.2": "4.3.2",
       "lodash@<4.18.1": "4.18.1",
       "multer@<2.3.0": "2.3.0",
       "path-to-regexp@<0.1.13": "0.1.13",
       "postcss@<8.5.23": "8.5.23",
-      "qs@<6.16.0": "6.16.0",
+      "qs@<6.16.1": "6.16.1",
       "source-map-js": "^1.2.2"
     }
   },
   "scripts": {
-    "dev": "corepack pnpm --filter web dev",
-    "dev:web": "corepack pnpm --filter web dev",
-    "dev:api": "corepack pnpm --filter api start:dev",
-    "build": "corepack pnpm --filter api build && corepack pnpm --filter web build",
-    "build:web": "corepack pnpm --filter web build",
-    "lint": "corepack pnpm --filter web lint",
+    "prepare": "husky",
+    "dev": "pnpm --filter web dev",
+    "dev:web": "pnpm --filter web dev",
+    "dev:api": "pnpm --filter api start:dev",
+    "build": "pnpm --filter api build && pnpm --filter web build",
+    "build:web": "pnpm --filter web build",
+    "lint": "pnpm --filter web lint",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "corepack pnpm --filter api test"
+    "test": "pnpm --filter api test"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx,mjs,cjs}": "eslint --fix",
+    "*.{json,md,yml,yaml,css,svg}": "prettier --write"
   },
   "devDependencies": {
+    "@commitlint/cli": "^21.2.4",
+    "@commitlint/config-conventional": "^21.2.4",
     "eslint": "^8.57.1",
     "eslint-config-next": "^15.5.24",
     "eslint-config-prettier": "^9.1.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.6.0",
     "prettier": "^3.4.2",
     "turbo": "^2.3.3",
     "typescript": "^5.7.2"

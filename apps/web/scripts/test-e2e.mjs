@@ -52,16 +52,15 @@ const env = {
 };
 
 run(
-  'corepack',
-  ['pnpm', 'exec', 'prisma', 'generate', '--schema', 'prisma/schema.prisma'],
+  'pnpm',
+  ['exec', 'prisma', 'generate', '--schema', 'prisma/schema.prisma'],
   apiDir,
   env,
 );
-run('corepack', ['pnpm', 'exec', 'next', 'build'], webDir, env);
+run('pnpm', ['exec', 'next', 'build'], webDir, env);
 run(
-  'corepack',
+  'pnpm',
   [
-    'pnpm',
     'exec',
     'prisma',
     'migrate',
@@ -75,8 +74,8 @@ run(
   env,
 );
 run(
-  'corepack',
-  ['pnpm', 'exec', 'playwright', 'test', '--config', 'playwright.config.ts'],
+  'pnpm',
+  ['exec', 'playwright', 'test', '--config', 'playwright.config.ts'],
   webDir,
   env,
 );
