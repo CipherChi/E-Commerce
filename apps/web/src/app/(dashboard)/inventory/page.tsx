@@ -88,7 +88,7 @@ export default function InventoryPage() {
     <main className="mx-auto min-h-screen max-w-7xl px-5 py-8 sm:px-10">
       <header className="flex items-center justify-between">
         <Link className="font-bold tracking-[.18em] text-accent" href="/">
-          STAYWISE
+          E Commerce Site
         </Link>
         <nav className="flex gap-4 text-sm">
           <Link href="/products">Catalog</Link>

@@ -61,10 +61,12 @@ export default function PropertiesPage() {
     }
   }
   return (
-    <main className={`mx-auto min-h-screen w-full max-w-6xl px-6 py-10 sm:px-10${flipOnReturn ? ' book-page-enter' : ''}`}>
+    <main
+      className={`mx-auto min-h-screen w-full max-w-6xl px-6 py-10 sm:px-10${flipOnReturn ? ' book-page-enter' : ''}`}
+    >
       <header className="flex items-center justify-between">
         <Link className="text-sm font-bold tracking-[0.18em] text-accent" href="/">
-          STAYWISE
+          E Commerce Site
         </Link>
         <Link className="nav-link text-sm text-ink/65 hover:text-accent" href="/login">
           Sign in

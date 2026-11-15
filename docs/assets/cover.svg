@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630" role="img" aria-labelledby="title description">
+  <title id="title">E Commerce Site</title>
+  <desc id="description">Multi-tenant business tools for property operations, bookings, catalog, inventory, sales, and receipts.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#071720"/>
+      <stop offset="0.58" stop-color="#0b2a31"/>
+      <stop offset="1" stop-color="#10233a"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.78" cy="0.38" r="0.62">
+      <stop offset="0" stop-color="#2dd4a7" stop-opacity="0.25"/>
+      <stop offset="1" stop-color="#2dd4a7" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#7cf7b0"/>
+      <stop offset="1" stop-color="#2dd4d4"/>
+    </linearGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#fff" stroke-opacity="0.035"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="630" fill="url(#background)"/>
+  <rect width="1200" height="630" fill="url(#grid)"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+  <path d="M0 490C220 405 420 548 640 465S1020 385 1200 450" fill="none" stroke="url(#accent)" stroke-opacity=".35" stroke-width="2"/>
+
+  <g font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+    <rect x="76" y="76" width="174" height="36" rx="18" fill="#7cf7b0" fill-opacity=".12" stroke="#7cf7b0" stroke-opacity=".5"/>
+    <text x="163" y="100" text-anchor="middle" font-size="14" font-weight="700" fill="#9affc7" letter-spacing="1.5">BUSINESS TOOLS</text>
+
+    <text x="76" y="222" font-size="72" font-weight="760" fill="#eafff6">E Commerce</text>
+    <text x="76" y="302" font-size="72" font-weight="760" fill="url(#accent)">Site</text>
+    <text x="80" y="358" font-size="21" fill="#c5ded8">Multi-tenant operations for properties, bookings,</text>
+    <text x="80" y="389" font-size="21" fill="#c5ded8">catalog, inventory, sales, and receipts.</text>
+
+    <g font-size="15" font-weight="650" fill="#dcfff0">
+      <rect x="78" y="430" width="130" height="38" rx="19" fill="#fff" fill-opacity=".07" stroke="#fff" stroke-opacity=".2"/>
+      <text x="143" y="454" text-anchor="middle">Next.js 15</text>
+      <rect x="218" y="430" width="126" height="38" rx="19" fill="#fff" fill-opacity=".07" stroke="#fff" stroke-opacity=".2"/>
+      <text x="281" y="454" text-anchor="middle">Express 4</text>
+      <rect x="354" y="430" width="201" height="38" rx="19" fill="#fff" fill-opacity=".07" stroke="#fff" stroke-opacity=".2"/>
+      <text x="454" y="454" text-anchor="middle">Prisma + PostgreSQL</text>
+      <rect x="78" y="480" width="233" height="38" rx="19" fill="#fff" fill-opacity=".07" stroke="#fff" stroke-opacity=".2"/>
+      <text x="194" y="504" text-anchor="middle">Bookings · Sales · Stock</text>
+    </g>
+    <text x="80" y="577" font-size="15" fill="#80a99f" letter-spacing=".6">github.com/CipherChi/E-Commerce</text>
+  </g>
+
+  <g transform="translate(675 105)">
+    <rect width="450" height="340" rx="24" fill="#081b22" fill-opacity=".92" stroke="#7cf7b0" stroke-opacity=".38"/>
+    <circle cx="28" cy="27" r="6" fill="#ff7777"/>
+    <circle cx="49" cy="27" r="6" fill="#ffd166"/>
+    <circle cx="70" cy="27" r="6" fill="#7cf7b0"/>
+    <rect x="104" y="15" width="270" height="24" rx="12" fill="#fff" fill-opacity=".08"/>
+
+    <path d="M52 112h346l-32-55H84z" fill="url(#accent)" fill-opacity=".92"/>
+    <path d="M70 112v170h310V112" fill="#102e37" stroke="#c8f5e2" stroke-opacity=".7" stroke-width="5"/>
+    <path d="M52 112h346" stroke="#e6fff3" stroke-width="8"/>
+    <rect x="96" y="143" width="86" height="102" rx="11" fill="#fff" fill-opacity=".08"/>
+    <rect x="106" y="153" width="66" height="49" rx="8" fill="#7cf7b0" fill-opacity=".56"/>
+    <path d="M111 218h48" stroke="#fff" stroke-opacity=".55" stroke-width="7" stroke-linecap="round"/>
+    <path d="M111 233h29" stroke="#7cf7b0" stroke-width="7" stroke-linecap="round"/>
+    <rect x="199" y="143" width="86" height="102" rx="11" fill="#fff" fill-opacity=".08"/>
+    <rect x="209" y="153" width="66" height="49" rx="8" fill="#62dada" fill-opacity=".55"/>
+    <path d="M214 218h48" stroke="#fff" stroke-opacity=".55" stroke-width="7" stroke-linecap="round"/>
+    <path d="M214 233h29" stroke="#7cf7b0" stroke-width="7" stroke-linecap="round"/>
+    <rect x="302" y="143" width="56" height="102" rx="11" fill="#fff" fill-opacity=".08"/>
+    <path d="M313 218h34M313 233h22" stroke="#7cf7b0" stroke-width="7" stroke-linecap="round"/>
+    <rect x="91" y="258" width="258" height="10" rx="5" fill="#fff" fill-opacity=".12"/>
+    <rect x="91" y="258" width="183" height="10" rx="5" fill="url(#accent)"/>
+    <rect x="91" y="290" width="153" height="34" rx="17" fill="url(#accent)"/>
+    <text x="168" y="313" text-anchor="middle" font-size="14" font-weight="700" fill="#082126">View sales</text>
+  </g>
+
+  <g transform="translate(900 350)" fill="none" stroke="url(#accent)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="107" cy="104" r="91" fill="#071720" fill-opacity=".94" stroke-width="3" stroke-opacity=".62"/>
+    <path d="M54 65h22l17 69h61l16-48H83"/>
+    <circle cx="105" cy="153" r="6" fill="#7cf7b0" stroke="none"/>
+    <circle cx="146" cy="153" r="6" fill="#7cf7b0" stroke="none"/>
+  </g>
+</svg>

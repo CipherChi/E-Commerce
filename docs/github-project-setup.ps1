@@ -22,7 +22,7 @@ foreach ($title in @('M9', 'M8.5 — Money to kobo', 'M10', 'M11', 'M12', 'M13',
   else { $milestones[$title] = [int](gh api "repos/$repo/milestones" -f title=$title --jq .number) }
 }
 
-$project = gh project create --owner $owner --title 'Hotel Manager M8.5–M14' --format json | ConvertFrom-Json
+$project = gh project create --owner $owner --title 'E Commerce Site M8.5–M14' --format json | ConvertFrom-Json
 $projectNumber = $project.number
 $projectId = gh project view $projectNumber --owner $owner --format json --jq .id
 $projectFields = gh project field-list $projectNumber --owner $owner --format json | ConvertFrom-Json

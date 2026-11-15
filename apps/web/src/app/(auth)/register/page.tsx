@@ -47,7 +47,7 @@ export default function RegisterPage() {
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-xl flex-col justify-center px-6 py-12">
       <Link className="text-sm font-bold tracking-[0.18em] text-accent" href="/">
-        STAYWISE
+        E Commerce Site
       </Link>
       <section className="auth-card mt-8 rounded-3xl border border-ink/10 p-8 shadow-sm sm:p-10">
         <h1 className="text-3xl font-semibold">Create your account</h1>
