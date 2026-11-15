@@ -25,6 +25,7 @@ test('retail sale, receipt, PDF, tenant isolation, and idempotent replay', async
   });
 
   await page.goto('/register');
+  await expect(page).toHaveTitle('E Commerce Site');
   await page.getByLabel('Name', { exact: true }).fill(`Retail Owner ${unique}`);
   await page.getByLabel('Email', { exact: true }).fill(email);
   await page.getByLabel('Primary business type').selectOption('SUPERMARKET');
@@ -243,4 +244,88 @@ test('retail sale, receipt, PDF, tenant isolation, and idempotent replay', async
     headers: { Authorization: `Bearer ${secondTokens.accessToken}` },
   });
   expect(crossTenantReceipt.status()).toBe(404);
+});
+
+test('reservation booking moves through confirmation, check-in, and checkout', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(120_000);
+  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const email = `reservation-${suffix}@example.test`;
+  const password = 'ReservationFlow!2026';
+  const customerName = `Reservation Guest ${suffix}`;
+  const businessName = `Reservation Business ${suffix}`;
+  const propertyName = `Reservation Property ${suffix}`;
+  const roomLabel = `R-${suffix.slice(-5)}`;
+
+  await page.goto('/register');
+  await page.getByLabel('Name', { exact: true }).fill(`Reservation Owner ${suffix}`);
+  await page.getByLabel('Email', { exact: true }).fill(email);
+  await page.getByLabel('Primary business type').selectOption('HOTEL');
+  await page.getByLabel('Password', { exact: true }).fill(password);
+  const registrationResponsePromise = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      new URL(response.url()).pathname === '/auth/register',
+  );
+  await page.getByRole('button', { name: 'Create account' }).click();
+  const registrationResponse = await registrationResponsePromise;
+  expect(registrationResponse.status()).toBe(201);
+  const { accessToken } = (await registrationResponse.json()) as { accessToken: string };
+  const authHeaders = { Authorization: `Bearer ${accessToken}` };
+  await expect(page).toHaveURL(/\/business$/);
+  await page.getByLabel('Business name').fill(businessName);
+  await page.getByLabel('Phone').fill('08030000001');
+  await page.getByLabel('Address').fill('1 Booking Road');
+  const businessResponsePromise = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' && new URL(response.url()).pathname === '/businesses',
+  );
+  await page.getByRole('button', { name: 'Create business' }).click();
+  const businessResponse = await businessResponsePromise;
+  expect(businessResponse.status()).toBe(201);
+  await expect(page).toHaveURL(/\/dashboard$/);
+
+  const propertyResponse = await request.post(`${apiUrl}/properties`, {
+    headers: authHeaders,
+    data: { name: propertyName, address: '1 Booking Road', type: 'HOTEL' },
+  });
+  expect(propertyResponse.status()).toBe(201);
+  const property = (await propertyResponse.json()) as { id: string };
+
+  const roomResponse = await request.post(`${apiUrl}/properties/${property.id}/rooms`, {
+    headers: authHeaders,
+    data: { label: roomLabel, type: 'Standard', capacity: 2, basePrice: '100.00' },
+  });
+  expect(roomResponse.status()).toBe(201);
+  const room = (await roomResponse.json()) as { id: string };
+
+  const customerResponse = await request.post(`${apiUrl}/customers`, {
+    headers: authHeaders,
+    data: { name: customerName, phone: '+2348098765432' },
+  });
+  expect(customerResponse.status()).toBe(201);
+
+  await page.goto('/bookings');
+  await page.getByLabel('Customer').fill(customerName);
+  await page.getByRole('button', { name: new RegExp(customerName) }).click();
+  await page.getByLabel('Property').selectOption({ label: propertyName });
+  await page.getByLabel('Room').selectOption(room.id);
+  await page.getByLabel('Check-in').fill('2032-02-01');
+  await page.getByLabel('Check-out').fill('2032-02-02');
+  await expect(page.getByRole('status')).toContainText('Room is available');
+  await page.getByRole('button', { name: 'Create booking' }).click();
+  await expect(page).toHaveURL(/\/bookings\/.+/);
+  await expect(page.getByRole('heading', { name: customerName })).toBeVisible();
+  await expect(page.getByText('PENDING', { exact: true })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Confirm booking' }).click();
+  await expect(page.getByText('CONFIRMED', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Check in' }).click();
+  await expect(page.getByText('CHECKED IN', { exact: true })).toBeVisible();
+  await expect(page.getByText('Room status: occupied')).toBeVisible();
+  await page.getByRole('button', { name: 'Check out' }).click();
+  await expect(page.getByText('CHECKED OUT', { exact: true })).toBeVisible();
+  await expect(page.getByText('Room status: cleaning')).toBeVisible();
 });
